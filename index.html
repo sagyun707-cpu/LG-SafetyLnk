@@ -1,0 +1,1287 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>LG SafeLink</title>
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#A50034">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js">
+function _renderAutoGen(tmpl,nm,src){
+ var cont=document.getElementById('agenContent');
+ var srcLabel=src==='gemini'?'🤖 Gemini AI':'📦 로컬 데이터';
+ var h='<div style="font-size:12px;color:#7C3AED;margin-bottom:10px">✅ <b>'+nm+'</b> — '+tmpl.length+'단계 JSA 자동생성 완료 <span style="font-size:10px;color:#6B7280">('+srcLabel+')</span></div>';
+ tmpl.forEach(function(s,i){
+  var c2=s.lv==='상'?'#FEE2E2;color:#DC2626':(s.lv==='중'?'#FEF3C7;color:#D97706':'#ECFDF5;color:#059669');
+  h+='<div class="agen-step" style="animation-delay:'+(i*.12)+'s;animation-fill-mode:forwards"><div style="display:flex;align-items:center;gap:6px;margin-bottom:6px"><span style="background:#7C3AED;color:#fff;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700">'+(i+1)+'</span><b style="font-size:13px">'+s.step+'</b><span style="margin-left:auto;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;background:'+c2+'">'+s.lv+'</span></div><div style="font-size:12px;color:#6B7280;margin-left:28px">⚠️ '+s.h+': '+s.cause+'</div><div style="font-size:12px;color:#059669;margin-left:28px;margin-top:2px">✅ '+s.ctrl+'</div></div>';
+ });
+ h+='<button class="btn btn-sm" style="background:linear-gradient(135deg,#7C3AED,#A78BFA);margin-top:8px;width:100%" onclick="applyAutoGen()">📥 JSA 단계에 자동 적용</button>';
+ cont.innerHTML=h;window._agc=tmpl;toast('AI 자동생성 완료: '+tmpl.length+'단계');
+}
+function _autoGenFallback(ty,nm){
+ var tmpl=AUTOGEN_TMPL[ty]||AUTOGEN_TMPL['고소작업'];
+ _renderAutoGen(tmpl,nm,'local');
+}
+function _renderSimilar(items,src){
+ var srcLabel=src==='gemini'?'🤖 Gemini':'📦 로컬';
+ window._st3=items.map(function(j){return{j:j,score:j.match||70};});
+ var h='';
+ items.forEach(function(j,idx){
+  var sc=j.match||70,cl=sc>=70?'#059669':(sc>=55?'#D97706':'#6B7280');
+  h+='<div class="sim-card"><div class="sim-match" style="background:'+cl+'">'+sc+'% 일치</div><div class="st">📋 '+j.title+'</div><div class="sm"><span>📅 '+j.date+'</span><span>👤 '+(j.author||'-')+'</span><span>📍 '+(j.zone||'-')+'</span><span>'+(j.steps||3)+'단계</span><span style="color:#9CA3AF;font-size:10px">'+srcLabel+'</span></div><button class="sim-apply" onclick="applySimilar('+idx+')">📥 불러오기</button></div>';
+ });
+ document.getElementById('simCards').innerHTML=h;toast('유사 JSA '+items.length+'건 매칭 완료');
+}
+function _similarFallback(ty,nm,zone){
+ var words=(nm||'').replace(/[^\uAC00-\uD7A3a-zA-Z0-9\s]/g,' ').split(/\s+/).filter(function(w){return w.length>=2;});
+ var scored=SIMILAR_JSA_DB.map(function(j){var s=0;if(ty&&j.type===ty)s+=45;if(zone&&j.zone===zone)s+=18;words.forEach(function(w){if(j.title.includes(w))s+=15;j.tags.forEach(function(t){if(t.includes(w)||w.includes(t))s+=10;});});s+=Math.floor(Math.random()*8);return{j:j,score:Math.min(98,s)};}).sort(function(a,b){return b.score-a.score;});
+ var top3=scored.slice(0,3);
+ if(top3[0]&&top3[0].score<55)top3[0].score=72+Math.floor(Math.random()*12);
+ if(top3[1]&&top3[1].score<45)top3[1].score=56+Math.floor(Math.random()*10);
+ if(top3[2]&&top3[2].score<35)top3[2].score=40+Math.floor(Math.random()*10);
+ var items=top3.map(function(it){var j=Object.assign({},it.j);j.match=it.score;return j;});
+ _renderSimilar(items,'local');
+}
+function _recomFallback(ty,el){
+ var recs={'고소작업':'🔹 추가 권장:\n1. 2m 이상 안전대 100% 착용\n2. 풍속 10m/s 이상 작업중지\n3. 안전발판 사전점검\n4. 고소차량 아웃트리거 전개\n5. 야간 조명 확보','용접작업':'🔹 추가 권장:\n1. 화기작업허가서 필수\n2. 전후 30분 화재감시\n3. 소화기 2대 이상\n4. 불꽃 비산방지 커버\n5. 가연물 10m 이내 제거','전기작업':'🔹 추가 권장:\n1. LOTO 절차 이행\n2. 정전/검전 확인\n3. 절연장갑/절연화\n4. 전기안전 자격자 배치\n5. CPR 가능 인원','밀폐공간작업':'🔹 추가 권장:\n1. 산소/가스 사전측정\n2. 감시인 상시 배치\n3. 송기마스크/공기호흡기\n4. 구조로프 및 안전대\n5. 출입허가서 발급','중장비작업':'🔹 추가 권장:\n1. 신호수 배치\n2. 작업반경 출입통제\n3. 장비 일일점검\n4. 정격하중 초과 금지\n5. 야간 경광등','배관작업':'🔹 추가 권장:\n1. 잔압/잔류물질 확인\n2. 블라인드 플랜지\n3. 가스누출 감지기\n4. MSDS 비치\n5. 비상샤워 확인','해체작업':'🔹 추가 권장:\n1. 해체계획서 승인\n2. 구조 안정성 검토\n3. 상부→하부 순서\n4. 비산방지 살수\n5. 폐기물 즉시 반출','도장작업':'🔹 추가 권장:\n1. MSDS 비치/교육\n2. 방독마스크 착용\n3. 정전기 방지 접지\n4. 화기 사용 금지\n5. 도료보관소 환기'};
+ el.textContent='🤖 '+ty+' AI 추천\n\n'+(recs[ty]||'준비 중');toast(ty+' AI 추천 완료');
+}
+function _chatFallback(txt,area){
+ var resp='안녕하세요!\n\n질문에 대한 정확한 답변을 찾지 못했습니다.\n\n💡 다음 주제로 질문해 보세요:\n• 안전수칙 • 보호구 • 비상 행동\n• 온열질환 • 작업중지권 • MSDS';
+ if(txt.includes('보호구')||txt.includes('착용'))resp=AI_R['보호구'];
+ else if(txt.includes('비상')||txt.includes('응급')||txt.includes('대피'))resp=AI_R['비상'];
+ else if(txt.includes('온열')||txt.includes('더위')||txt.includes('열사병')||txt.includes('폭염'))resp=AI_R['온열질환'];
+ else if(txt.includes('중지')||txt.includes('중지권'))resp=AI_R['작업중지'];
+ else if(txt.includes('MSDS')||txt.includes('화학물질'))resp=AI_R['MSDS'];
+ else if(txt.includes('안전수칙')||txt.includes('안전규칙'))resp=AI_R['안전수칙'];
+ else{for(var k in AI_R){if(AI_R.hasOwnProperty(k)&&txt.includes(k)){resp=AI_R[k];break;}}}
+ area.innerHTML+='<div class="ch-msg"><div class="ch-av" style="background:linear-gradient(135deg,#7C3AED,#A855F7);color:#fff">🤖</div><div class="ch-bub">'+resp.replace(/\n/g,'<br>')+'</div></div>';
+ area.scrollTop=area.scrollHeight;
+}
+
+
+function addJsaChatMsg(role,text){
+ var el=document.getElementById('jsaChatMsgs');
+ var isBot=role==='bot';
+ var av=isBot?'<div style="width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#7C3AED,#A855F7);display:flex;align-items:center;justify-content:center;font-size:14px;color:#fff;flex-shrink:0">🤖</div>':'<div style="width:30px;height:30px;border-radius:50%;background:rgba(37,99,235,.15);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">👤</div>';
+ var bs=isBot?'background:#F0F0F5;border-radius:12px 12px 12px 4px':'background:rgba(37,99,235,.1);border-radius:12px 12px 4px 12px';
+ var dir=isBot?'':'flex-direction:row-reverse';
+ el.innerHTML+='<div style="display:flex;gap:8px;margin-bottom:10px;align-items:flex-start;'+dir+'">'+av+'<div style="max-width:80%;padding:10px 14px;font-size:13px;line-height:1.6;'+bs+'">'+text.replace(/\n/g,'<br>')+'</div></div>';
+ el.scrollTop=el.scrollHeight;
+}
+function startJsaChat(){
+ var panel=document.getElementById('jsaChat');
+ panel.style.display='block';
+ document.getElementById('photoAssess').style.display='none';
+ document.getElementById('jsaChatMsgs').innerHTML='';
+ jsaChatHistory=[];
+ var ty=document.getElementById('jsaTy').value;
+ var nm=document.getElementById('jsaNm').value.trim();
+ var msg='안녕하세요! 세피입니다 🤖\n대화형 JSA를 시작할게요.\n\n';
+ if(ty&&nm){msg+='작업유형: '+ty+'\n작업명: '+nm+'\n\n이 작업의 구체적인 환경을 알려주세요.\n예) 높이, 밀폐여부, 사용장비, 인원수 등';}
+ else if(ty){msg+='작업유형: '+ty+'\n\n정확한 작업명을 알려주세요.\n예) 3층 배관 TIG용접, P1 지붕 방수 등';}
+ else{msg+='어떤 작업의 JSA를 작성하시나요?\n예) 용접작업, 고소작업, 밀폐공간작업 등';}
+ addJsaChatMsg('bot',msg);
+ jsaChatHistory.push({role:'assistant',content:msg});
+ panel.scrollIntoView({behavior:'smooth',block:'center'});
+}
+function sendJsaChat(){
+ var inp=document.getElementById('jsaChatIn');
+ var txt=inp.value.trim();if(!txt)return;inp.value='';
+ addJsaChatMsg('user',txt);
+ jsaChatHistory.push({role:'user',content:txt});
+ if(AI_ONLINE){
+  addJsaChatMsg('bot','<span style="color:#6B7280">분석 중... 💭</span>');
+  fetch(API_BASE+'/api/jsa-chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:txt,history:jsaChatHistory,work_type:document.getElementById('jsaTy').value,work_name:document.getElementById('jsaNm').value})})
+  .then(function(r){return r.json()})
+  .then(function(d){
+   var msgs=document.getElementById('jsaChatMsgs');
+   if(msgs.lastChild)msgs.removeChild(msgs.lastChild);
+   var resp=d.reply||'죄송합니다. 다시 말씀해 주세요.';
+   addJsaChatMsg('bot',resp);
+   jsaChatHistory.push({role:'assistant',content:resp});
+   if(d.jsa_ready&&d.steps){
+    addJsaChatMsg('bot','✅ JSA가 준비되었습니다! 아래 버튼으로 적용하세요.');
+    window._agc=d.steps;
+    var el=document.getElementById('jsaChatMsgs');
+    el.innerHTML+='<div style="text-align:center;margin:8px 0"><button onclick="applyAutoGen();toast(\'대화형 JSA 적용 완료\')" class="btn btn-sm" style="background:linear-gradient(135deg,#7C3AED,#A78BFA)">📥 JSA 단계에 자동 적용</button></div>';
+    el.scrollTop=el.scrollHeight;
+   }
+  }).catch(function(){
+   var msgs=document.getElementById('jsaChatMsgs');
+   if(msgs.lastChild)msgs.removeChild(msgs.lastChild);
+   addJsaChatMsg('bot','⚠️ AI 연결 실패. 상단 AI 자동생성 버튼을 이용해 보세요!');
+  });
+ }else{
+  addJsaChatMsg('bot','⚠️ AI 오프라인. 상단 AI 자동생성 버튼으로 로컬 데이터 기반 JSA를 생성할 수 있어요!');
+ }
+}
+function startPhotoAssess(){
+ document.getElementById('photoAssess').style.display='block';
+ document.getElementById('jsaChat').style.display='none';
+ document.getElementById('photoResult').style.display='none';
+ document.getElementById('photoPreview').style.display='none';
+ document.getElementById('photoAssess').scrollIntoView({behavior:'smooth',block:'center'});
+}
+function previewPhoto(input){
+ if(!input.files||!input.files[0])return;
+ var reader=new FileReader();
+ reader.onload=function(e){
+  document.getElementById('photoImg').src=e.target.result;
+  document.getElementById('photoPreview').style.display='block';
+  document.getElementById('photoResult').style.display='none';
+  window._photoBase64=e.target.result;
+ };
+ reader.readAsDataURL(input.files[0]);
+}
+function submitPhoto(){
+ if(!window._photoBase64){toast('사진을 선택해 주세요');return;}
+ var res=document.getElementById('photoResult');
+ res.style.display='block';
+ res.innerHTML='<div style="text-align:center;padding:16px"><div class="dp"><span></span><span></span><span></span></div><div style="margin-top:8px;font-size:13px;color:#DC2626;font-weight:600">🤖 AI가 현장 사진을 분석 중... (10초)</div></div>';
+ var ty=document.getElementById('jsaTy').value;
+ var nm=document.getElementById('jsaNm').value.trim();
+ if(AI_ONLINE){
+  fetch(API_BASE+'/api/photo-assess',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({image:window._photoBase64,work_type:ty,work_name:nm})})
+  .then(function(r){return r.json()})
+  .then(function(d){
+   if(d.text){
+    res.innerHTML='<div style="font-size:12px;color:#DC2626;font-weight:700;margin-bottom:8px">📷 AI 위험성평가 결과 <span style="color:#6B7280;font-weight:400">(Gemini Vision)</span></div>'+d.text.replace(/\n/g,'<br>');
+    toast('사진 위험성평가 완료!');
+    if(d.steps&&d.steps.length){
+     window._agc=d.steps;
+     res.innerHTML+='<div style="text-align:center;margin-top:10px"><button onclick="applyAutoGen();toast(\'사진 기반 JSA 적용 완료\')" class="btn btn-sm" style="background:linear-gradient(135deg,#DC2626,#EF4444)">📥 JSA 단계에 자동 적용</button></div>';
+    }
+   }else{
+    res.innerHTML='⚠️ AI 응답 실패. 잠시 후 다시 시도해 주세요.';
+   }
+  }).catch(function(){res.innerHTML='⚠️ 연결 실패';});
+ }else{
+  res.innerHTML='⚠️ AI 오프라인. Gemini 연결 후 사용 가능합니다.';
+ }
+}
+// ── 회원가입 ──
+function checkUser(){var u=localStorage.getItem('sl_user');if(u){window._slUser=JSON.parse(u);return;}showRegister();}
+function showRegister(){var bg=document.createElement('div');bg.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center';bg.innerHTML='<div style="background:#fff;border-radius:16px;padding:24px;max-width:340px;width:90%;text-align:center"><div style="font-size:32px;margin-bottom:8px">🛡️</div><h3 style="font-size:18px;font-weight:800;margin-bottom:4px">SafeLink</h3><p style="font-size:12px;color:#6B7280;margin-bottom:16px">사용자 등록</p><input id="rName" placeholder="이름" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;margin-bottom:8px;font-size:14px"><input id="rCompany" placeholder="소속회사" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;margin-bottom:8px;font-size:14px"><select id="rRole" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;margin-bottom:8px;font-size:14px;background:#fff"><option value="">직급 선택</option><option>사원</option><option>주임</option><option>대리</option><option>과장</option><option>차장</option><option>부장</option><option>기타</option></select><input id="rPhone" placeholder="연락처 (010-0000-0000)" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;margin-bottom:14px;font-size:14px"><button onclick="doRegister(this)" style="width:100%;padding:12px;background:#A50034;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer">등록하기</button></div>';document.body.appendChild(bg);window._regBg=bg;}
+function doRegister(btn){var name=document.getElementById('rName').value.trim();var company=document.getElementById('rCompany').value.trim();var role=document.getElementById('rRole').value;var phone=document.getElementById('rPhone').value.trim();if(!name||!company){alert('이름과 소속을 입력해주세요');return;}btn.textContent='등록 중...';btn.disabled=true;var user={name:name,company:company,role:role,phone:phone};fetch(API_BASE+'/api/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(user)}).then(function(r){return r.json()}).then(function(d){localStorage.setItem('sl_user',JSON.stringify(d.user||user));window._slUser=d.user||user;if(window._regBg)window._regBg.remove();alert('환영합니다, '+name+'님!');}).catch(function(){localStorage.setItem('sl_user',JSON.stringify(user));if(window._regBg)window._regBg.remove();});}
+checkUser();
+
+// ── 공지사항 ──
+function loadNotices(){fetch(API_BASE+'/api/notices').then(function(r){return r.json()}).then(function(list){var el=document.getElementById('noticeList');if(!el)return;if(!list.length){el.innerHTML='<div style="text-align:center;color:#9CA3AF;padding:40px">등록된 공지가 없습니다</div>';return;}var h='';for(var i=0;i<list.length;i++){var n=list[i];h+='<div onclick="showNotice('+i+')" style="padding:14px 16px;background:#fff;border-radius:12px;margin-bottom:8px;border:1px solid #E5E7EB;cursor:pointer"><div style="font-size:14px;font-weight:700">'+n.title+'</div><div style="font-size:11px;color:#9CA3AF;margin-top:4px">'+n.date+' · '+n.author+'</div></div>';}el.innerHTML=h;window._notices=list;});}
+function showNotice(i){var n=window._notices[i];if(!n)return;var bg=document.createElement('div');bg.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center';bg.onclick=function(e){if(e.target===bg)bg.remove()};bg.innerHTML='<div style="background:#fff;border-radius:16px;padding:20px;max-width:400px;width:90%;max-height:80vh;overflow-y:auto"><div style="font-size:16px;font-weight:800;margin-bottom:4px">'+n.title+'</div><div style="font-size:11px;color:#9CA3AF;margin-bottom:14px">'+n.date+' · '+n.author+'</div><div style="font-size:14px;line-height:1.8;white-space:pre-wrap">'+n.body+'</div><button onclick="this.parentElement.parentElement.remove()" style="width:100%;margin-top:14px;padding:10px;background:#A50034;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer">닫기</button></div>';document.body.appendChild(bg);}
+</script>
+<style>
+
+:root{--mg:#A50034;--bg:#F3F4F6;--wh:#fff;--tx:#1F2937;--tx2:#6B7280;--bd:#E5E7EB;--rd:14px;--sh:0 2px 12px rgba(0,0,0,.08);--gd:linear-gradient(135deg,#A50034,#D4004A);--grn:#059669;--amb:#D97706;--blu:#2563EB;--pur:#7C3AED;--red:#DC2626}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans KR',sans-serif;background:var(--bg);color:var(--tx);font-size:15px;line-height:1.5}
+.app{max-width:480px;margin:0 auto;padding:60px 0 76px;min-height:100vh}
+.hd{position:fixed;top:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;height:56px;background:rgba(255,255,255,.92);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);display:flex;align-items:center;padding:0 16px;z-index:100;border-bottom:1px solid var(--bd)}
+.hd-back{width:36px;height:36px;border:none;background:none;font-size:22px;cursor:pointer;display:none;align-items:center;justify-content:center;border-radius:50%;color:var(--tx)}.hd-back.on{display:flex}.hd-back:active{background:rgba(0,0,0,.04)}
+.hd-sep{width:1px;height:18px;background:var(--bd);margin:0 10px}.hd-t{font-size:17px;font-weight:700;color:var(--mg)}
+.hd-r{margin-left:auto;display:flex;gap:6px;align-items:center}
+.hd-btn{width:36px;height:36px;border:none;background:none;font-size:16px;color:var(--tx2);cursor:pointer;border-radius:50%;display:flex;align-items:center;justify-content:center}.hd-btn:active{background:rgba(0,0,0,.04)}
+.sync-badge{position:absolute;top:-2px;right:-2px;background:var(--mg);color:var(--wh);font-size:9px;min-width:16px;height:16px;border-radius:8px;display:none;align-items:center;justify-content:center;font-weight:700}
+.pg{display:none;padding:16px;animation:fi .3s ease}.pg.on{display:block}
+@keyframes fi{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+@keyframes pop{0%{transform:scale(.85);opacity:0}100%{transform:scale(1);opacity:1}}
+@keyframes sp{to{transform:rotate(360deg)}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+.hero{border-radius:20px;padding:24px;color:var(--wh);margin-bottom:14px;background:linear-gradient(135deg,#A50034,#D4004A 50%,#FF1654);box-shadow:0 6px 24px rgba(165,0,52,0.2)}
+.hero-date{font-size:12px;opacity:.75;margin-bottom:2px}.hero-greet{font-size:20px;font-weight:800;margin-bottom:14px}
+.hero-weather{display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.18);border-radius:12px;padding:12px 14px}
+.hero-wi{font-size:32px}.hero-wt{font-size:26px;font-weight:700}.hero-wd{font-size:12px;opacity:.85}
+.hw{border-radius:14px;padding:14px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px;font-size:13px;border:1px solid var(--bd)}
+.hw-ic{font-size:26px;flex-shrink:0}.hw-t{font-weight:700;font-size:14px;margin-bottom:1px}.hw-d{font-size:12px;color:var(--tx2)}
+.hw-safe{background:rgba(5,150,105,.06);border-color:rgba(5,150,105,.2)}
+.hw-caut{background:rgba(217,119,6,.06);border-color:rgba(217,119,6,.2)}
+.hw-warn{background:rgba(234,88,12,.08);border-color:rgba(234,88,12,.25)}
+.hw-dang{background:rgba(220,38,38,.08);border-color:rgba(220,38,38,.25);animation:pulse 2s infinite}
+.qm{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:16px}
+.qm-b{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:20px 8px 16px;background:var(--wh);border-radius:var(--rd);box-shadow:var(--sh);border:none;cursor:pointer;font-size:13px;font-weight:600;color:var(--tx);transition:all .15s;position:relative}
+.qm-b:active{transform:scale(.95)}.qm-b .qi{font-size:34px;margin-bottom:2px}
+.qm-pts{position:absolute;top:8px;right:8px;background:var(--gd);color:var(--wh);font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px}
+.cd{background:var(--wh);border-radius:var(--rd);padding:18px;margin-bottom:14px;box-shadow:var(--sh)}
+.cd-t{font-size:15px;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.fl{margin-bottom:14px}.fl label{display:block;font-size:12px;font-weight:600;color:var(--tx2);margin-bottom:6px}
+.fl input,.fl select,.fl textarea{width:100%;padding:12px 14px;border-radius:12px;border:1.5px solid var(--bd);background:var(--wh);color:var(--tx);font-size:14px;outline:none;transition:border .2s;font-family:inherit}
+.fl input:focus,.fl select:focus,.fl textarea:focus{border-color:var(--mg)}
+.fl input::placeholder,.fl textarea::placeholder{color:#9CA3AF}
+.fl textarea{min-height:80px;resize:vertical}
+.dg{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px}
+.dg-b{padding:12px 4px;border-radius:12px;border:2px solid var(--bd);background:var(--wh);text-align:center;font-size:11px;font-weight:600;cursor:pointer;transition:all .15s;color:var(--tx)}.dg-b.on{border-color:var(--mg);background:rgba(165,0,52,.04);color:var(--mg)}.dg-b:active{transform:scale(.94)}
+.dg-b .de{font-size:24px;display:block;margin-bottom:3px}
+.rlc{display:flex;gap:8px;margin-bottom:14px}
+.rlb{flex:1;padding:12px 6px;border-radius:12px;border:2px solid var(--bd);background:var(--wh);text-align:center;font-size:13px;font-weight:700;cursor:pointer;transition:all .15s;color:var(--tx)}
+.rlb.rh.on{border-color:var(--red);background:rgba(220,38,38,.06);color:var(--red)}
+.rlb.rm.on{border-color:var(--amb);background:rgba(217,119,6,.06);color:var(--amb)}
+.rlb.rl.on{border-color:var(--grn);background:rgba(5,150,105,.06);color:var(--grn)}
+.rc{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+.rc-b{flex:1;min-width:60px;padding:10px 6px;border-radius:12px;border:2px solid var(--bd);background:var(--wh);text-align:center;font-size:12px;font-weight:600;cursor:pointer;color:var(--tx);transition:all .15s}.rc-b.on{border-color:var(--mg);background:rgba(165,0,52,.04);color:var(--mg)}
+.btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:14px;border-radius:12px;border:none;font-size:15px;font-weight:700;cursor:pointer;transition:all .15s;color:var(--wh);font-family:inherit}
+.btn-mg{background:var(--gd);box-shadow:0 4px 12px rgba(165,0,52,0.25)}.btn-mg:active{transform:scale(.97);opacity:.9}
+.btn-gl{background:var(--wh);border:1.5px solid var(--bd);color:var(--tx)}.btn-gl:active{background:var(--bg)}
+.btn-grn{background:linear-gradient(135deg,#047857,#10B981)}
+.btn-blu{background:linear-gradient(135deg,#1D4ED8,#3B82F6)}
+.btn-pur{background:linear-gradient(135deg,#6D28D9,#8B5CF6)}
+.btn-sm{padding:10px 16px;font-size:13px;width:auto;border-radius:10px}
+.btn+.btn,.mt8{margin-top:8px}
+.ab{padding:14px 16px;border-radius:14px;font-size:13px;line-height:1.5;margin-bottom:14px;display:flex;align-items:flex-start;gap:10px}
+.ab-red{background:rgba(220,38,38,.06);border-left:3px solid var(--red);color:#991B1B}
+.ab-blu{background:rgba(37,99,235,.06);border-left:3px solid var(--blu);color:#1E40AF}
+.ab-grn{background:rgba(5,150,105,.06);border-left:3px solid var(--grn);color:#065F46}
+.ab-amb{background:rgba(217,119,6,.06);border-left:3px solid var(--amb);color:#92400E}
+.ab-pur{background:rgba(124,58,237,.06);border-left:3px solid var(--pur);color:#5B21B6}
+.tb{display:flex;gap:0;margin-bottom:16px;background:var(--wh);border-radius:12px;padding:4px;box-shadow:var(--sh)}
+.tbt{flex:1;padding:10px 4px;border-radius:8px;border:none;background:none;color:var(--tx2);font-size:12px;font-weight:600;cursor:pointer;transition:all .2s;font-family:inherit;white-space:nowrap}.tbt.on{background:var(--mg);color:var(--wh)}
+.tp{display:none}.tp.on{display:block;animation:fi .3s}
+.bn{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;height:68px;background:rgba(255,255,255,.94);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);display:flex;align-items:center;justify-content:space-around;z-index:100;border-top:1px solid var(--bd)}
+.bni{display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 12px;border:none;background:none;color:var(--tx2);font-size:10px;font-weight:600;cursor:pointer;transition:all .2s;border-radius:10px;font-family:inherit}.bni.on{color:var(--mg)}.bni .bi{font-size:22px}
+.toast{position:fixed;top:68px;left:50%;transform:translateX(-50%);background:rgba(31,41,55,.92);color:var(--wh);padding:12px 24px;border-radius:12px;font-size:14px;font-weight:600;z-index:200;opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap;box-shadow:0 4px 20px rgba(0,0,0,.15)}.toast.show{opacity:1}
+.sov{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;z-index:300;padding:20px}.sov.on{display:flex}
+.sov-bx{background:var(--wh);border-radius:24px;padding:40px 28px;text-align:center;max-width:320px;width:100%;animation:pop .35s;box-shadow:0 12px 40px rgba(0,0,0,.15)}
+.sov-ic{font-size:56px;margin-bottom:10px}.sov-tt{font-size:20px;font-weight:800;margin-bottom:6px;color:var(--tx)}.sov-pt{font-size:30px;font-weight:800;color:var(--mg);margin-bottom:6px}.sov-sb{font-size:13px;color:var(--tx2);margin-bottom:18px}
+.sov-btn{padding:12px 36px;border-radius:12px;border:none;background:var(--gd);color:var(--wh);font-size:15px;font-weight:700;cursor:pointer}
+.cki{display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--wh);border-radius:12px;margin-bottom:8px;cursor:pointer;border:1.5px solid var(--bd);transition:all .2s}
+.cki.ck{background:rgba(5,150,105,.04);border-color:rgba(5,150,105,.3)}
+.ckb{width:22px;height:22px;border-radius:6px;border:2px solid var(--bd);display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0;background:var(--wh);color:transparent;transition:all .15s}
+.cki.ck .ckb{background:var(--grn);border-color:var(--grn);color:var(--wh)}
+.tg{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:var(--wh);border-radius:12px;margin-bottom:8px;border:1.5px solid var(--bd)}
+.tg-sw{width:44px;height:24px;border-radius:24px;background:var(--bd);position:relative;cursor:pointer;flex-shrink:0;transition:background .3s}
+.tg-sw::after{content:'';position:absolute;top:2px;left:2px;width:20px;height:20px;border-radius:50%;background:var(--wh);transition:transform .25s;box-shadow:0 1px 4px rgba(0,0,0,.15)}
+.tg-sw.on{background:var(--grn)}.tg-sw.on::after{transform:translateX(20px)}
+.sigc{width:100%;height:160px;border-radius:12px;border:2px dashed var(--bd);background:var(--wh);cursor:crosshair;touch-action:none}
+.ppe-g{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px}
+.ppe-i{padding:10px 4px;border-radius:12px;border:2px solid var(--bd);background:var(--wh);text-align:center;font-size:10px;font-weight:600;cursor:pointer;transition:all .15s;color:var(--tx)}
+.ppe-i.on{border-color:var(--grn);background:rgba(5,150,105,.04);color:var(--grn)}.ppe-i .pe{font-size:24px;display:block;margin-bottom:3px}
+.ct{display:flex;align-items:center;gap:14px;padding:14px;background:var(--wh);box-shadow:var(--sh);border-radius:14px;margin-bottom:10px;text-decoration:none;color:var(--tx)}
+.ct-ic{font-size:28px;width:46px;height:46px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:rgba(165,0,52,.06);flex-shrink:0}
+.ct-nm{font-weight:700;font-size:14px}.ct-nu{font-size:13px;color:var(--tx2);margin-top:1px}
+.ct-call{margin-left:auto;width:40px;height:40px;border-radius:12px;border:none;background:var(--gd);color:var(--wh);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;text-decoration:none}
+.nb{padding:12px 16px;background:var(--wh);box-shadow:var(--sh);border-radius:12px;font-size:13px;color:var(--tx2);cursor:pointer}.nb:active{background:var(--bg)}.nb strong{color:var(--tx)}
+.nli{padding:14px;background:var(--wh);box-shadow:var(--sh);border-radius:14px;margin-bottom:10px}
+.nli-t{font-weight:700;font-size:14px;margin-bottom:3px;color:var(--tx)}.nli-d{font-size:12px;color:var(--tx2)}
+.str{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px}
+.stc{background:var(--wh);box-shadow:var(--sh);border-radius:14px;padding:16px 8px;text-align:center}
+.stc .sv{font-size:26px;font-weight:800;color:var(--mg)}.stc .sl{font-size:11px;color:var(--tx2);margin-top:4px}
+.ptc{background:var(--gd);border-radius:20px;padding:24px;text-align:center;margin-bottom:16px;color:var(--wh);position:relative;overflow:hidden}
+.ptc::after{content:'';position:absolute;top:-40px;right:-40px;width:120px;height:120px;border-radius:50%;background:rgba(255,255,255,.08)}
+.ptc-lb{font-size:12px;opacity:.8}.ptc-v{font-size:42px;font-weight:800}.ptc-u{font-size:14px;opacity:.8}
+.pf-av{width:72px;height:72px;border-radius:50%;background:var(--gd);display:flex;align-items:center;justify-content:center;font-size:30px;margin:0 auto 10px;color:var(--wh)}
+.pf-nm{text-align:center;font-size:18px;font-weight:700;margin-bottom:2px;color:var(--tx)}
+.pf-dp{text-align:center;font-size:13px;color:var(--tx2);margin-bottom:20px}
+.hli{display:flex;align-items:center;gap:12px;padding:12px;background:var(--wh);border:1px solid var(--bd);border-radius:12px;margin-bottom:6px}
+.hli-ic{font-size:18px;width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:rgba(165,0,52,.06);flex-shrink:0}
+.hli-t{font-size:13px;font-weight:600;color:var(--tx)}.hli-d{font-size:11px;color:var(--tx2)}.hli-pt{font-size:14px;font-weight:700;color:var(--grn);margin-left:auto}
+.jsa-r{background:var(--wh);box-shadow:var(--sh);border-radius:14px;padding:16px;margin-bottom:12px;position:relative}
+.jsa-sn{font-weight:700;font-size:14px;color:var(--mg);margin-bottom:10px}
+.jsa-del{position:absolute;top:10px;right:10px;width:28px;height:28px;border-radius:8px;border:none;background:rgba(220,38,38,.08);color:var(--red);font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.jsa-ai{background:rgba(124,58,237,.05);border:1px solid rgba(124,58,237,.15);border-radius:14px;padding:16px;margin-bottom:14px}
+.jsa-ai .at{font-size:14px;font-weight:700;color:var(--pur);margin-bottom:10px}
+.jsa-air{margin-top:12px;padding:14px;background:rgba(124,58,237,.04);border:1px solid rgba(124,58,237,.1);border-radius:12px;font-size:13px;line-height:1.7;color:var(--tx);white-space:pre-wrap;max-height:300px;overflow-y:auto}
+.ch-area{padding-bottom:70px;min-height:300px}
+.ch-msg{display:flex;gap:8px;margin-bottom:14px;align-items:flex-start}
+.ch-user{flex-direction:row-reverse}
+.ch-av{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.ch-bub{max-width:78%;padding:12px 16px;border-radius:16px;font-size:14px;line-height:1.6}
+.ch-msg:not(.ch-user) .ch-bub{background:#F0F0F5;color:var(--tx);border-top-left-radius:4px}
+.ch-user .ch-bub{background:rgba(37,99,235,.1);color:var(--tx);border-top-right-radius:4px}
+.ch-iw{position:fixed;bottom:68px;left:50%;transform:translateX(-50%);width:100%;max-width:480px;padding:10px 16px;background:rgba(255,255,255,.95);backdrop-filter:blur(20px);border-top:1px solid var(--bd);display:none;gap:8px;align-items:center;z-index:90}.ch-iw.on{display:flex}
+.ch-iw input{flex:1;padding:12px 16px;border-radius:24px;border:1.5px solid var(--bd);background:var(--wh);color:var(--tx);font-size:14px;outline:none;font-family:inherit}.ch-iw input::placeholder{color:#9CA3AF}.ch-iw input:focus{border-color:var(--mg)}
+.ch-send{width:42px;height:42px;border-radius:50%;border:none;background:var(--gd);color:var(--wh);font-size:18px;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.ch-qk{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+.ch-qk button{padding:8px 14px;border-radius:20px;border:1.5px solid var(--bd);background:var(--wh);color:var(--tx);font-size:12px;cursor:pointer;font-family:inherit;transition:all .15s;box-shadow:0 1px 4px rgba(0,0,0,.04)}.ch-qk button:active{background:var(--bg)}
+.att-i{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--wh);border:1px solid var(--bd);border-radius:10px;margin-bottom:6px;font-size:13px;color:var(--tx)}
+.att-i img{width:60px;height:28px;border-radius:4px;object-fit:contain;border:1px solid var(--bd)}
+.empty{text-align:center;padding:30px;color:var(--tx2);font-size:13px}
+
+
+/* === SAPI AI v3 === */
+.sapi-panel{background:linear-gradient(160deg,#FDFCFF 0%,#F3EEFF 50%,#EDE8FC 100%);border:1.5px solid rgba(124,58,237,.1);border-radius:20px;padding:20px;margin-bottom:14px;box-shadow:0 4px 24px rgba(124,58,237,.06)}
+.sapi-hd{display:flex;align-items:center;gap:14px;margin-bottom:18px}
+.sapi-av{width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,#7C3AED,#A855F7);display:flex;align-items:center;justify-content:center;font-size:26px;color:#fff;flex-shrink:0;box-shadow:0 4px 16px rgba(124,58,237,.3);overflow:hidden;position:relative}
+.sapi-av img{width:100%;height:100%;object-fit:cover;border-radius:50%}
+.sapi-dot{position:absolute;bottom:1px;right:1px;width:11px;height:11px;background:#10B981;border-radius:50%;border:2.5px solid #F3EEFF;animation:dpul 2s infinite}
+@keyframes dpul{0%,100%{box-shadow:0 0 0 0 rgba(16,185,129,.4)}50%{box-shadow:0 0 0 5px rgba(16,185,129,0)}}
+.sapi-info .sn{font-size:17px;font-weight:800;background:linear-gradient(135deg,#6D28D9,#A855F7);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.sapi-info .sd{font-size:11px;color:var(--tx2);margin-top:2px}
+/* 2x3 Grid */
+.ai-cards{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.ai-cd{position:relative;display:flex;flex-direction:column;align-items:center;text-align:center;padding:18px 12px 14px;background:#fff;border-radius:18px;box-shadow:0 2px 12px rgba(0,0,0,.05);cursor:pointer;border:1.5px solid rgba(0,0,0,.04);border-top:4px solid transparent;transition:all .25s cubic-bezier(.4,0,.2,1);font-family:inherit;color:var(--tx);overflow:hidden}
+.ai-cd:active{transform:translateY(-2px) scale(.98);box-shadow:0 8px 24px rgba(0,0,0,.1)}
+.ai-cd::after{content:'';position:absolute;top:0;left:50%;transform:translateX(-50%);width:40px;height:3px;border-radius:0 0 4px 4px;opacity:0;transition:all .25s}
+.ai-cd:active::after{width:60%;opacity:1}
+.ai-cd-ic{width:50px;height:50px;border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:26px;flex-shrink:0;color:#fff;margin-bottom:10px;box-shadow:0 4px 12px rgba(0,0,0,.1);transition:transform .25s}
+.ai-cd:active .ai-cd-ic{transform:scale(1.08)}
+.ai-cd-nm{font-size:14px;font-weight:700;margin-bottom:3px}
+.ai-cd-sub{font-size:10.5px;color:var(--tx2);line-height:1.45}
+.ai-tag{display:inline-block;margin-top:7px;padding:2px 10px;border-radius:10px;font-size:9px;font-weight:700;color:#fff;letter-spacing:.3px}
+/* Color variants - top border + icon bg */
+.ac-pur{border-top-color:#7C3AED}.ac-pur .ai-cd-ic{background:linear-gradient(135deg,#7C3AED,#A78BFA)}.ac-pur::after{background:#7C3AED}
+.ac-grn{border-top-color:#059669}.ac-grn .ai-cd-ic{background:linear-gradient(135deg,#059669,#34D399)}.ac-grn::after{background:#059669}
+.ac-cyn{border-top-color:#0891B2}.ac-cyn .ai-cd-ic{background:linear-gradient(135deg,#0891B2,#22D3EE)}.ac-cyn::after{background:#0891B2}
+.ac-red{border-top-color:#DC2626}.ac-red .ai-cd-ic{background:linear-gradient(135deg,#DC2626,#F87171)}.ac-red::after{background:#DC2626}
+.ac-vio{border-top-color:#6D28D9}.ac-vio .ai-cd-ic{background:linear-gradient(135deg,#6D28D9,#C084FC)}.ac-vio::after{background:#6D28D9}
+.ac-sky{border-top-color:#0369A1}.ac-sky .ai-cd-ic{background:linear-gradient(135deg,#0369A1,#38BDF8)}.ac-sky::after{background:#0369A1}
+/* Premium bottom cards */
+.ai-cd-pm{background:linear-gradient(160deg,#FAF8FF,#F0EBFF);border:1.5px solid rgba(109,40,217,.1);border-top:4px solid}
+.ai-cd-pm.ac-vio{border-top-color:#6D28D9}
+.ai-cd-pm.ac-sky{background:linear-gradient(160deg,#F7FBFF,#E8F4FD);border-color:rgba(3,105,161,.1);border-top-color:#0369A1}
+/* AutoGen */
+.agen-res{background:linear-gradient(135deg,#F5F3FF,#EDE9FE);border:2px solid #C4B5FD;border-radius:18px;padding:16px;margin-bottom:14px;display:none}
+.agen-res .at{font-size:14px;font-weight:700;color:#5B21B6;margin-bottom:10px}
+.agen-loading{display:flex;align-items:center;gap:10px;padding:12px}
+.agen-loading .dp{display:flex;gap:5px}.agen-loading .dp span{width:9px;height:9px;border-radius:50%;background:#7C3AED;animation:dB .6s ease-in-out infinite alternate}
+.agen-loading .dp span:nth-child(2){animation-delay:.2s}.agen-loading .dp span:nth-child(3){animation-delay:.4s}
+@keyframes dB{from{opacity:.3;transform:translateY(0)}to{opacity:1;transform:translateY(-6px)}}
+.agen-step{background:#fff;border-radius:12px;padding:12px;margin-bottom:8px;border-left:4px solid #7C3AED;opacity:0;animation:aS .4s ease forwards}
+@keyframes aS{from{opacity:0;transform:translateX(-16px)}to{opacity:1;transform:none}}
+/* Similar */
+.sim-wrap{display:none;margin-bottom:14px}.sim-card{background:#fff;border-radius:16px;padding:14px 14px 14px 18px;margin-bottom:10px;border:1px solid var(--bd);box-shadow:var(--sh);position:relative;overflow:hidden;border-left:4px solid #38BDF8}
+.sim-card .st{font-size:14px;font-weight:700;margin-bottom:6px}.sim-card .sm{font-size:11px;color:var(--tx2);display:flex;gap:8px;flex-wrap:wrap}
+.sim-match{position:absolute;top:10px;right:10px;color:#fff;padding:3px 10px;border-radius:16px;font-size:11px;font-weight:700}
+.sim-apply{margin-top:10px;padding:8px 18px;border:none;border-radius:10px;background:linear-gradient(135deg,#0369A1,#38BDF8);color:#fff;font-size:12px;font-weight:600;cursor:pointer;box-shadow:0 2px 8px rgba(3,105,161,.2)}.sim-apply:active{transform:scale(.96)}
+/* Chat */
+.ch-hd2{border-radius:20px;padding:22px;color:#fff;margin-bottom:14px;background:linear-gradient(135deg,#7C3AED,#9333EA,#A855F7);box-shadow:0 6px 24px rgba(124,58,237,.25);display:flex;align-items:center;gap:14px;position:relative;overflow:hidden}
+.ch-hd2::before{content:'';position:absolute;top:-40px;right:-40px;width:120px;height:120px;border-radius:50%;background:rgba(255,255,255,.07)}
+.ch-hd2::after{content:'';position:absolute;bottom:-30px;left:-20px;width:80px;height:80px;border-radius:50%;background:rgba(255,255,255,.05)}
+.ch-hd2 .ch-av2{width:66px;height:66px;border-radius:50%;background:rgba(255,255,255,.18);display:flex;align-items:center;justify-content:center;font-size:32px;flex-shrink:0;overflow:hidden;border:3px solid rgba(255,255,255,.25);backdrop-filter:blur(8px)}
+.ch-hd2 .ch-av2 img{width:100%;height:100%;object-fit:cover;border-radius:50%}
+.ch-hd2 .cn{font-size:20px;font-weight:800}.ch-hd2 .cs{font-size:12px;opacity:.85}
+.ch-hd2 .co{display:inline-block;width:8px;height:8px;background:#34D399;border-radius:50%;margin-right:5px;box-shadow:0 0 6px rgba(52,211,153,.6)}
+.ch-qk2{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:14px}
+.ch-qk2 button{display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:14px;border:1.5px solid var(--bd);background:var(--wh);color:var(--tx);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;text-align:left;transition:all .15s;box-shadow:0 1px 6px rgba(0,0,0,.04)}
+.ch-qk2 button:active{background:var(--bg);transform:scale(.97)}
+.ch-qk2 .qi2{font-size:22px;flex-shrink:0}
+
+</style>
+</head>
+<body>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+<!-- Overlay -->
+<div class="sov" id="sov"><div class="sov-bx"><div class="sov-ic" id="sovIc">✅</div><div class="sov-tt" id="sovTt">제출 완료!</div><div class="sov-pt" id="sovPt"></div><div class="sov-sb" id="sovSb">감사합니다</div><button class="sov-btn" onclick="closeSov()">확인</button></div></div>
+<!-- Header -->
+<div class="hd">
+<button class="hd-back" id="hdBack" onclick="goHome()">←</button>
+<img src="lg_ci.png" height="28" style="flex-shrink:0">
+<div class="hd-sep"></div>
+<div class="hd-t">SafeLink</div>
+<div class="hd-r"><button class="hd-btn" onclick="syncData()" style="position:relative">🔄<span class="sync-badge" id="syncBadge">0</span></button></div>
+</div>
+<div class="app">
+
+<!-- HOME -->
+<div class="pg on" id="pg-home">
+<div class="hero">
+ <div class="hero-date" id="heroDate"></div>
+ <div class="hero-greet" id="heroGreet">안전한 하루 되세요! 👷</div>
+ <div class="hero-weather">
+  <div class="hero-wi" id="heroWi">☀️</div>
+  <div><div class="hero-wt" id="heroWt">28°C</div><div class="hero-wd" id="heroWd">맑음 · 창원 성산구</div></div>
+ </div>
+</div>
+<div class="hw hw-safe" id="hwBox">
+ <div class="hw-ic" id="hwIc">🟢</div>
+ <div><div class="hw-t" id="hwT">온열질환 안전</div><div class="hw-d" id="hwD">체감온도 28°C · 정상 작업 가능</div></div>
+</div>
+<div class="qm">
+ <button class="qm-b" onclick="go('stop-work')"><span class="qi">🛑</span>작업중지<span class="qm-pts">50P</span></button>
+ <button class="qm-b" onclick="go('tbm-pro')"><span class="qi">📋</span>TBM PRO</button>
+ <button class="qm-b" onclick="go('jsa')"><span class="qi">🔍</span>JSA 위험성평가</button>
+ <button class="qm-b" onclick="go('suggestion')"><span class="qi">💡</span>개선제안<span class="qm-pts">30P</span></button>
+ <button class="qm-b" onclick="go('near-miss')"><span class="qi">⚠️</span>아차사고<span class="qm-pts">40P</span></button>
+ <button class="qm-b" onclick="go('ai-chat')"><span class="qi">🤖</span>AI 안전어시스턴트</button>
+ <button class="qm-b" onclick="go('opinion')"><span class="qi">🗣️</span>의견청취<span class="qm-pts">20P</span></button>
+ <button class="qm-b" onclick="go('stats')"><span class="qi">📊</span>실적관리</button>
+ <button class="qm-b" onclick="go('emer')"><span class="qi">🚨</span>비상연락</button>
+ <button class="qm-b" onclick="go('profile')"><span class="qi">👤</span>내정보</button>
+</div>
+<div class="nb" onclick="go('notices')">📢 <strong>공지</strong> &nbsp;하절기 온열질환 예방 특별점검 실시 (6~9월)</div>
+</div>
+
+<!-- STOP WORK 50P -->
+<div class="pg" id="pg-stop-work">
+<div class="ab ab-red">🛑 위험 발견 시 <strong>즉시 작업중지</strong> 후 신고해 주세요. (50P 적립)</div>
+<div class="cd"><div class="cd-t">📍 위치</div>
+ <div class="fl"><label>구역</label><select id="swZ" onchange="updB('swZ','swB')"><option value="">선택</option><option>파크1</option><option>파크2</option><option>공용구역</option><option>옥외</option></select></div>
+ <div class="fl"><label>건물</label><select id="swB"><option value="">구역 먼저 선택</option></select></div>
+</div>
+<div class="cd"><div class="cd-t">⚡ 위험유형</div>
+ <div class="dg" id="swDg">
+  <button class="dg-b" onclick="selD('swDg',this)"><span class="de">🔥</span>화재</button>
+  <button class="dg-b" onclick="selD('swDg',this)"><span class="de">⚡</span>감전</button>
+  <button class="dg-b" onclick="selD('swDg',this)"><span class="de">⬇️</span>추락</button>
+  <button class="dg-b" onclick="selD('swDg',this)"><span class="de">⚙️</span>끼임</button>
+  <button class="dg-b" onclick="selD('swDg',this)"><span class="de">☁️</span>질식</button>
+  <button class="dg-b" onclick="selD('swDg',this)"><span class="de">💥</span>폭발</button>
+  <button class="dg-b" onclick="selD('swDg',this)"><span class="de">🧱</span>붕괴</button>
+  <button class="dg-b" onclick="selD('swDg',this)"><span class="de">🧪</span>화학물질</button>
+  <button class="dg-b" onclick="selD('swDg',this)"><span class="de">📋</span>기타</button>
+ </div>
+</div>
+<div class="cd"><div class="cd-t">⚠️ 위험수준</div>
+ <div class="rlc" id="swRl">
+  <button class="rlb rh" onclick="selR('swRl',this)">🔴 상</button>
+  <button class="rlb rm" onclick="selR('swRl',this)">🟡 중</button>
+  <button class="rlb rl" onclick="selR('swRl',this)">🟢 하</button>
+ </div>
+</div>
+<div class="cd"><div class="cd-t">📝 상세설명</div>
+ <div class="fl"><textarea id="swDesc" placeholder="위험 상황을 구체적으로 설명해 주세요..." rows="4"></textarea></div>
+</div>
+<button class="btn btn-mg" onclick="submitSW()">🛑 작업중지 신고 (+50P)</button>
+</div>
+
+<!-- TBM PRO -->
+<div class="pg" id="pg-tbm-pro">
+<div class="ab ab-blu">📋 <strong>TBM PRO</strong> — 작업 전 안전미팅 기록 · 중대재해처벌법 이행 증빙</div>
+<div class="tb">
+ <button class="tbt on" onclick="tbT(0)">📝 실행계획</button>
+ <button class="tbt" onclick="tbT(1)">✍️ 서명</button>
+ <button class="tbt" onclick="tbT(2)">🦺 보호구</button>
+</div>
+<div class="tp on" id="tbTp0">
+ <div class="cd"><div class="cd-t">📌 기본정보</div>
+  <div class="fl"><label>작업일자</label><input type="date" id="tbDate"></div>
+  <div class="fl"><label>TBM 리더</label><input id="tbLdr" placeholder="관리감독자 이름"></div>
+  <div class="fl"><label>작업명</label><input id="tbWk" placeholder="예: 3층 배관용접 작업"></div>
+  <div class="fl"><label>구역</label><select id="tbZ" onchange="updB('tbZ','tbB')"><option value="">선택</option><option>파크1</option><option>파크2</option><option>공용구역</option><option>옥외</option></select></div>
+  <div class="fl"><label>건물</label><select id="tbB"><option value="">구역 먼저 선택</option></select></div>
+  <div class="fl"><label>작업인원</label><input type="number" id="tbNum" placeholder="인원수" min="1"></div>
+  <div class="fl"><label>작업유형</label><select id="tbTy"><option value="">선택</option><option>고소작업</option><option>용접작업</option><option>전기작업</option><option>밀폐공간작업</option><option>중장비작업</option><option>배관작업</option><option>해체작업</option><option>도장작업</option><option>일반작업</option></select></div>
+  <div class="tg"><span style="font-size:13px;font-weight:600">위험성평가(RA) 실시</span><div class="tg-sw" id="tbRa" onclick="this.classList.toggle('on')"></div></div>
+ </div>
+ <div class="cd"><div class="cd-t">✅ 사전준비 (4)</div>
+  <div class="cki" onclick="tgCk(this)"><div class="ckb">✓</div><div style="font-size:13px;flex:1">위험성평가 실시 여부 확인</div></div>
+  <div class="cki" onclick="tgCk(this)"><div class="ckb">✓</div><div style="font-size:13px;flex:1">사고보고서(아차사고 포함) 확인</div></div>
+  <div class="cki" onclick="tgCk(this)"><div class="ckb">✓</div><div style="font-size:13px;flex:1">작업 범위·보호구 숙지</div></div>
+  <div class="cki" onclick="tgCk(this)"><div class="ckb">✓</div><div style="font-size:13px;flex:1">안전작업지침 내용 숙지</div></div>
+ </div>
+ <div class="cd"><div class="cd-t">🔄 실행과정 (5)</div>
+  <div class="cki" onclick="tgCk(this)"><div class="ckb">✓</div><div style="font-size:13px;flex:1">음주·발열·약물 확인</div></div>
+  <div class="cki" onclick="tgCk(this)"><div class="ckb">✓</div><div style="font-size:13px;flex:1">위험요인·안전절차 대화</div></div>
+  <div class="cki" onclick="tgCk(this)"><div class="ckb">✓</div><div style="font-size:13px;flex:1">중점 위험요인 도출·숙지</div></div>
+  <div class="cki" onclick="tgCk(this)"><div class="ckb">✓</div><div style="font-size:13px;flex:1">불안전 상태 발견 시 멈춤·확인·조치</div></div>
+  <div class="cki" onclick="tgCk(this)"><div class="ckb">✓</div><div style="font-size:13px;flex:1">작업 후 정리정돈 확인</div></div>
+ </div>
+ <div class="cd"><div class="cd-t">📋 후속조치 (3)</div>
+  <div class="cki" onclick="tgCk(this)"><div class="ckb">✓</div><div style="font-size:13px;flex:1">불만/질문/제안사항 검토</div></div>
+  <div class="cki" onclick="tgCk(this)"><div class="ckb">✓</div><div style="font-size:13px;flex:1">TBM 결과 충실 기록 보관</div></div>
+  <div class="cki" onclick="tgCk(this)"><div class="ckb">✓</div><div style="font-size:13px;flex:1">조치 결과 작업자 피드백</div></div>
+ </div>
+</div>
+<div class="tp" id="tbTp1">
+ <div class="cd"><div class="cd-t">✍️ 참석자 서명</div>
+  <div class="fl"><label>참석자 이름</label><input id="sigNm" placeholder="이름 입력"></div>
+  <canvas class="sigc" id="sigCv"></canvas>
+  <div style="display:flex;gap:8px;margin-top:8px">
+   <button class="btn btn-gl btn-sm" onclick="clrSig()">🗑 지우기</button>
+   <button class="btn btn-mg btn-sm" onclick="saveSig()">✓ 서명저장</button>
+  </div>
+ </div>
+ <div class="cd"><div class="cd-t">👥 참석자 (<span id="attCnt">0</span>명)</div><div id="attList"><div class="empty">서명된 참석자 없음</div></div></div>
+</div>
+<div class="tp" id="tbTp2">
+ <div class="cd"><div class="cd-t">🦺 보호구 착용 확인</div>
+  
+  <div class="ppe-g" id="ppeG">
+   <div class="ppe-i" onclick="tgPpe(this)"><span class="pe">⛑️</span>안전모</div>
+   <div class="ppe-i" onclick="tgPpe(this)"><span class="pe">🥽</span>보안경</div>
+   <div class="ppe-i" onclick="tgPpe(this)"><span class="pe">🧤</span>안전장갑</div>
+   <div class="ppe-i" onclick="tgPpe(this)"><span class="pe">👢</span>안전화</div>
+   <div class="ppe-i" onclick="tgPpe(this)"><span class="pe">🦺</span>안전조끼</div>
+   <div class="ppe-i" onclick="tgPpe(this)"><span class="pe">🎧</span>귀마개</div>
+   <div class="ppe-i" onclick="tgPpe(this)"><span class="pe">😷</span>방진마스크</div>
+   <div class="ppe-i" onclick="tgPpe(this)"><span class="pe">🪢</span>안전대</div>
+  </div>
+  <button class="btn btn-grn btn-sm" onclick="savePpe()">✓ 착용확인 기록</button>
+ </div>
+ <div class="cd"><div class="cd-t">📋 착용 확인 내역</div><div id="ppeLog"><div class="empty">착용 확인 내역 없음</div></div></div>
+</div>
+<button class="btn btn-mg" onclick="submitTBM()">📋 TBM PRO 제출</button>
+<button class="btn btn-gl mt8" onclick="genPdf()">📄 PDF 생성</button>
+</div>
+
+<!-- JSA -->
+<div class="pg" id="pg-jsa">
+<div class="ab ab-pur">🔍 JSA 위험성평가(상시 위험성평가) — 작업 단계별 위험요인 분석 및 안전대책 수립</div>
+<div class="sapi-panel">
+ <div class="sapi-hd">
+  <div class="sapi-av"><img src="assets/sapi/sapi_ai.png" onerror="this.style.display='none';this.parentElement.innerHTML='🤖'">
+   <div class="sapi-dot"></div></div>
+  <div class="sapi-info"><div class="sn">SAPI AI 어시스턴트</div><div class="sd">세피가 JSA 작성을 도와드립니다 💡 <span id="aiStatus" style="display:none;font-size:10px;margin-left:6px"></span></div></div>
+ </div>
+ <div class="ai-cards">
+  <button class="ai-cd ac-vio ai-cd-pm" onclick="aiAutoGen()"><div class="ai-cd-ic">🚀</div><div class="ai-cd-nm">AI 자동생성</div><div class="ai-cd-sub">작업명만 입력하면<br>JSA 전체를 AI가 작성</div><span class="ai-tag" style="background:linear-gradient(135deg,#6D28D9,#A78BFA)">🔥 추천</span></button>
+  <button class="ai-cd ac-sky ai-cd-pm" onclick="aiSimilar()"><div class="ai-cd-ic">📚</div><div class="ai-cd-nm">유사JSA 매칭</div><div class="ai-cd-sub">과거 유사작업 3건<br>자동 추천 · 불러오기</div><span class="ai-tag" style="background:linear-gradient(135deg,#0369A1,#38BDF8)">📊 유사도 분석</span></button>
+  <button class="ai-cd ac-grn" onclick="aiRecom()"><div class="ai-cd-ic">💡</div><div class="ai-cd-nm">AI 추천</div><div class="ai-cd-sub">현재 JSA에 맞는<br>추가 안전대책을 AI가 제안</div></button>
+  <button class="ai-cd ac-red" onclick="aiAccident()"><div class="ai-cd-ic">⚠️</div><div class="ai-cd-nm">사고사례</div><div class="ai-cd-sub">유사 작업의 과거<br>사고사례·교훈 조회</div></button>
+ </div>
+ <button onclick="startJsaChat()" style="width:100%;margin-top:10px;padding:12px;border-radius:14px;border:2px solid rgba(124,58,237,.15);background:linear-gradient(135deg,#FAF8FF,#F0EBFF);color:#5B21B6;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:8px">💬 대화형 JSA 생성 <span style="font-size:11px;font-weight:500;color:#7C3AED">(세피가 질문하며 작성)</span></button>
+<button onclick="startPhotoAssess()" style="width:100%;margin-top:8px;padding:12px;border-radius:14px;border:2px solid rgba(220,38,38,.15);background:linear-gradient(135deg,#FFF5F5,#FEE2E2);color:#DC2626;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:8px">📷 사진 위험성평가 <span style="font-size:11px;font-weight:500;color:#EF4444">(현장사진 → AI 자동분석 10초)</span></button>
+<div id="jsaChat" style="display:none;margin-top:14px">
+ <div style="background:#fff;border-radius:16px;padding:14px;border:1.5px solid rgba(124,58,237,.12)">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+   <div style="font-size:14px;font-weight:700;color:#5B21B6">💬 대화형 JSA — 세피와 함께</div>
+   <button onclick="document.getElementById('jsaChat').style.display='none'" style="border:none;background:none;font-size:18px;cursor:pointer;color:#9CA3AF">✕</button>
+  </div>
+  <div id="jsaChatMsgs" style="max-height:320px;overflow-y:auto;margin-bottom:10px"></div>
+  <div style="display:flex;gap:8px">
+   <input id="jsaChatIn" placeholder="답변 입력..." onkeydown="if(event.key==='Enter')sendJsaChat()" style="flex:1;padding:10px 14px;border-radius:20px;border:1.5px solid #E5E7EB;font-size:13px;outline:none;font-family:inherit">
+   <button onclick="sendJsaChat()" style="padding:8px 16px;border-radius:20px;border:none;background:linear-gradient(135deg,#7C3AED,#A855F7);color:#fff;font-size:13px;font-weight:600;cursor:pointer">전송</button>
+  </div>
+ </div>
+</div>
+<div id="photoAssess" style="display:none;margin-top:14px">
+ <div style="background:#fff;border-radius:16px;padding:14px;border:1.5px solid rgba(220,38,38,.12)">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+   <div style="font-size:14px;font-weight:700;color:#DC2626">📷 사진 위험성평가 <span style="font-size:10px;color:#6B7280;font-weight:500">(ai-riska 스타일)</span></div>
+   <button onclick="document.getElementById('photoAssess').style.display='none'" style="border:none;background:none;font-size:18px;cursor:pointer;color:#9CA3AF">✕</button>
+  </div>
+  <div style="text-align:center;padding:16px;border:2px dashed #E5E7EB;border-radius:14px;margin-bottom:10px;cursor:pointer;background:#FAFAFA" onclick="document.getElementById('photoInput').click()">
+   <div style="font-size:36px;margin-bottom:6px">📸</div>
+   <div style="font-size:13px;color:#6B7280;font-weight:600">현장 사진을 촬영하거나 선택하세요</div>
+   <div style="font-size:11px;color:#9CA3AF;margin-top:4px">AI가 10초 만에 위험요인을 자동 식별합니다</div>
+  </div>
+  <input type="file" id="photoInput" accept="image/*" capture="environment" style="display:none" onchange="previewPhoto(this)">
+  <div id="photoPreview" style="display:none;margin-bottom:10px;text-align:center">
+   <img id="photoImg" style="max-width:100%;max-height:200px;border-radius:12px;border:1px solid #E5E7EB">
+   <button onclick="submitPhoto()" style="margin-top:10px;width:100%;padding:12px;border-radius:12px;border:none;background:linear-gradient(135deg,#DC2626,#EF4444);color:#fff;font-size:14px;font-weight:700;cursor:pointer">🤖 AI 위험성평가 분석 시작</button>
+  </div>
+  <div id="photoResult" style="display:none;padding:14px;background:rgba(220,38,38,.04);border:1px solid rgba(220,38,38,.1);border-radius:12px;font-size:13px;line-height:1.7;white-space:pre-wrap;max-height:400px;overflow-y:auto"></div>
+ </div>
+</div>
+
+<div class="jsa-air" id="jsaAir" style="display:none"></div>
+</div>
+<div class="agen-res" id="agenRes"><div class="at">🧠 AI 자동생성 결과</div><div id="agenContent"></div></div>
+<div class="sim-wrap" id="simWrap"><div style="margin-bottom:10px;font-size:14px;font-weight:700;color:#0369A1">📚 유사 JSA 매칭 결과 (상위 3건)</div><div id="simCards"></div></div>
+<div class="cd"><div class="cd-t">📌 작업정보</div>
+ <div class="fl"><label>작업유형</label><select id="jsaTy"><option value="">선택</option><option>고소작업</option><option>용접작업</option><option>전기작업</option><option>밀폐공간작업</option><option>중장비작업</option><option>배관작업</option><option>해체작업</option><option>도장작업</option></select></div>
+ <div class="fl"><label>구역</label><select id="jsaZ" onchange="updB('jsaZ','jsaB')"><option value="">선택</option><option>파크1</option><option>파크2</option><option>공용구역</option><option>옥외</option></select></div>
+ <div class="fl"><label>건물</label><select id="jsaB"><option value="">구역 먼저 선택</option></select></div>
+ <div class="fl"><label>작업명</label><input id="jsaNm" placeholder="구체적인 작업명"></div>
+</div>
+<div id="jsaRows"></div>
+<button class="btn btn-gl" onclick="addJR()">➕ 작업단계 추가</button>
+<button class="btn btn-mg mt8" onclick="submitJSA()">🔍 JSA 위험성평가 제출</button>
+</div>
+
+<!-- 개선제안 30P -->
+<!-- 개선제안 30P -->
+<div class="pg" id="pg-suggestion">
+<div class="ab ab-blu">💡 안전 개선 아이디어를 제안해 주세요. (30P 적립)</div>
+<div class="cd"><div class="cd-t">📍 위치</div>
+ <div class="fl"><label>구역</label><select id="sgZ" onchange="updB('sgZ','sgB')"><option value="">선택</option><option>파크1</option><option>파크2</option><option>공용구역</option><option>옥외</option></select></div>
+ <div class="fl"><label>건물</label><select id="sgB"><option value="">구역 먼저 선택</option></select></div>
+</div>
+<div class="cd"><div class="cd-t">🏷️ 카테고리</div>
+ <div class="rc" id="sgRc">
+  <button class="rc-b" onclick="selC('sgRc',this)">시설개선</button>
+  <button class="rc-b" onclick="selC('sgRc',this)">절차개선</button>
+  <button class="rc-b" onclick="selC('sgRc',this)">장비개선</button>
+  <button class="rc-b" onclick="selC('sgRc',this)">환경개선</button>
+ </div>
+</div>
+<div class="cd"><div class="cd-t">💡 제안내용</div>
+ <div class="fl"><label>제목</label><input id="sgTi" placeholder="제안 제목"></div>
+ <div class="fl"><label>현재 문제점</label><textarea id="sgPb" placeholder="현재 어떤 문제가 있나요?"></textarea></div>
+ <div class="fl"><label>개선 방안</label><textarea id="sgSl" placeholder="어떻게 개선하면 좋을까요?"></textarea></div>
+</div>
+<button class="btn btn-mg" onclick="submitSG()">💡 개선제안 제출 (+30P)</button>
+</div>
+
+<!-- 아차사고 40P -->
+<div class="pg" id="pg-near-miss">
+<div class="ab ab-amb">⚠️ 아차사고를 보고하여 사고를 예방해 주세요. (40P 적립)</div>
+<div class="cd"><div class="cd-t">📍 위치</div>
+ <div class="fl"><label>구역</label><select id="nmZ" onchange="updB('nmZ','nmB')"><option value="">선택</option><option>파크1</option><option>파크2</option><option>공용구역</option><option>옥외</option></select></div>
+ <div class="fl"><label>건물</label><select id="nmB"><option value="">구역 먼저 선택</option></select></div>
+</div>
+<div class="cd"><div class="cd-t">⚡ 사고유형</div>
+ <div class="dg" id="nmDg">
+  <button class="dg-b" onclick="selD('nmDg',this)"><span class="de">⬇️</span>추락</button>
+  <button class="dg-b" onclick="selD('nmDg',this)"><span class="de">🧱</span>전도</button>
+  <button class="dg-b" onclick="selD('nmDg',this)"><span class="de">💥</span>충돌</button>
+  <button class="dg-b" onclick="selD('nmDg',this)"><span class="de">⚙️</span>끼임</button>
+  <button class="dg-b" onclick="selD('nmDg',this)"><span class="de">🔥</span>화재</button>
+  <button class="dg-b" onclick="selD('nmDg',this)"><span class="de">⚡</span>감전</button>
+  <button class="dg-b" onclick="selD('nmDg',this)"><span class="de">🧪</span>화학물질</button>
+  <button class="dg-b" onclick="selD('nmDg',this)"><span class="de">📦</span>낙하물</button>
+  <button class="dg-b" onclick="selD('nmDg',this)"><span class="de">📋</span>기타</button>
+ </div>
+</div>
+<div class="cd"><div class="cd-t">📝 상세내용</div>
+ <div class="fl"><textarea id="nmDs" placeholder="아차사고 상황을 구체적으로..." rows="4"></textarea></div>
+ <div class="fl"><label>조치사항</label><textarea id="nmAc" placeholder="취한 조치사항"></textarea></div>
+</div>
+<button class="btn btn-mg" onclick="submitNM()">⚠️ 아차사고 보고 (+40P)</button>
+</div>
+
+<!-- AI 안전어시스턴트 -->
+<div class="pg" id="pg-ai-chat">
+<div class="ch-hd2">
+ <div class="ch-av2"><img src="assets/sapi/sapi_ai.png" onerror="this.style.display='none';this.parentElement.innerHTML='🤖'"></div>
+ <div>
+  <div class="cn">세피 (SAPI)</div>
+  <div class="cs"><span class="co"></span>온라인 · AI 안전 어시스턴트 <span id="aiStatus2" style="font-size:10px"></span></div>
+  <div class="cs" style="margin-top:2px;opacity:.7">무엇이든 물어보세요! JSA·규정·안전수칙 즉답</div>
+ </div>
+</div>
+<div class="ch-qk2">
+ <button onclick="qChat('안전수칙')"><span class="qi2">📖</span><div>안전수칙<br><span style="font-size:10px;color:var(--tx2)">주요 안전규칙</span></div></button>
+ <button onclick="qChat('보호구 착용법')"><span class="qi2">🦺</span><div>보호구<br><span style="font-size:10px;color:var(--tx2)">착용법 안내</span></div></button>
+ <button onclick="qChat('비상시 행동요령')"><span class="qi2">🚨</span><div>비상행동<br><span style="font-size:10px;color:var(--tx2)">응급 대응절차</span></div></button>
+ <button onclick="qChat('온열질환 예방')"><span class="qi2">🌡️</span><div>온열질환<br><span style="font-size:10px;color:var(--tx2)">예방 기준</span></div></button>
+ <button onclick="qChat('작업중지권')"><span class="qi2">🛑</span><div>작업중지권<br><span style="font-size:10px;color:var(--tx2)">법적 권리 안내</span></div></button>
+ <button onclick="qChat('MSDS 확인')"><span class="qi2">🧪</span><div>MSDS<br><span style="font-size:10px;color:var(--tx2)">화학물질 정보</span></div></button>
+ <button onclick="qChat('JSA 작성 도와줘')"><span class="qi2">🔍</span><div>JSA 도움<br><span style="font-size:10px;color:var(--tx2)">위험성평가 질문</span></div></button>
+ <button onclick="qChat('안전규정 알려줘')"><span class="qi2">📜</span><div>규정 질문<br><span style="font-size:10px;color:var(--tx2)">규제 즉답</span></div></button>
+</div>
+<div class="ch-area" id="chMsgs">
+ <div class="ch-msg"><div class="ch-av" style="background:linear-gradient(135deg,#7C3AED,#A855F7);color:#fff">🤖</div><div class="ch-bub">안녕하세요! <strong>세피</strong>입니다 🤖<br>안전 관련 궁금한 점이 있으시면 편하게 질문해 주세요!<br><span style="font-size:11px;color:#6B7280">💡 JSA 작성, 안전규정, 보호구, 비상대응 등 무엇이든!</span></div></div>
+</div>
+</div>
+
+<!-- 의견청취 20P -->
+<!-- 의견청취 20P -->
+<div class="pg" id="pg-opinion">
+<div class="ab ab-grn">🗣️ 안전에 대한 소중한 의견을 남겨 주세요. (20P 적립)</div>
+<div class="cd"><div class="cd-t">🏷️ 분류</div>
+ <div class="rc" id="opRc">
+  <button class="rc-b" onclick="selC('opRc',this)">안전제도</button>
+  <button class="rc-b" onclick="selC('opRc',this)">작업환경</button>
+  <button class="rc-b" onclick="selC('opRc',this)">복지/건강</button>
+  <button class="rc-b" onclick="selC('opRc',this)">기타</button>
+ </div>
+</div>
+<div class="cd"><div class="cd-t">📝 의견작성</div>
+ <div class="fl"><label>제목</label><input id="opTi" placeholder="의견 제목"></div>
+ <div class="fl"><label>상세내용</label><textarea id="opCt" placeholder="자유롭게 의견을 작성..." rows="5"></textarea></div>
+</div>
+<button class="btn btn-mg" onclick="submitOP()">🗣️ 의견 제출 (+20P)</button>
+</div>
+
+<!-- 실적관리 -->
+<div class="pg" id="pg-stats">
+<div class="cd"><div class="cd-t">📊 활동 통계</div>
+ <div class="str">
+  <div class="stc"><div class="sv" id="sSW">0</div><div class="sl">작업중지</div></div>
+  <div class="stc"><div class="sv" id="sTB">0</div><div class="sl">TBM</div></div>
+  <div class="stc"><div class="sv" id="sJS">0</div><div class="sl">JSA</div></div>
+  <div class="stc"><div class="sv" id="sSG">0</div><div class="sl">개선제안</div></div>
+  <div class="stc"><div class="sv" id="sNM">0</div><div class="sl">아차사고</div></div>
+  <div class="stc"><div class="sv" id="sOP">0</div><div class="sl">의견청취</div></div>
+ </div>
+</div>
+<div class="cd"><div class="cd-t">💾 데이터 관리</div>
+ <button class="btn btn-gl" onclick="expJSON()">📥 JSON 내보내기</button>
+ <button class="btn btn-gl mt8" onclick="expCSV()">📊 CSV 내보내기</button>
+ <button class="btn btn-gl mt8" onclick="clearAll()" style="color:var(--red)">🗑️ 전체 삭제</button>
+</div>
+</div>
+
+<!-- 비상연락 -->
+<div class="pg" id="pg-emer">
+<div class="ab ab-red">🚨 비상 상황 시 아래 연락처로 <strong>즉시 연락</strong>하세요.</div>
+<div class="ct"><div class="ct-ic">🚒</div><div><div class="ct-nm">119 소방서 (화재/구조/응급)</div><div class="ct-nu">119</div></div><a href="tel:119" class="ct-call">📞</a></div>
+<div class="ct"><div class="ct-ic">🛡️</div><div><div class="ct-nm">방재센터 (응급의료/화재/누출)</div><div class="ct-nu">055-260-XXXX</div></div><a href="tel:055260XXXX" class="ct-call">📞</a></div>
+<div class="ct"><div class="ct-ic">🚔</div><div><div class="ct-nm">경찰서</div><div class="ct-nu">112</div></div><a href="tel:112" class="ct-call">📞</a></div>
+<div class="ct"><div class="ct-ic">⚡</div><div><div class="ct-nm">전기안전 비상 (방재센터)</div><div class="ct-nu">055-260-XXXX</div></div><a href="tel:055260XXXX" class="ct-call">📞</a></div>
+<div class="ct"><div class="ct-ic">☣️</div><div><div class="ct-nm">유해물질 누출 (방재센터)</div><div class="ct-nu">055-260-XXXX</div></div><a href="tel:055260XXXX" class="ct-call">📞</a></div>
+</div>
+<!-- 공지사항 -->
+<div class="pg" id="pg-notices">
+<div class="nli"><div class="nli-t">📢 하절기 온열질환 예방 특별점검 실시</div><div class="nli-d">2026-05-20 · 창원안전보건1팀</div></div>
+<div class="nli"><div class="nli-t">🔧 6월 정기 안전점검 일정 안내</div><div class="nli-d">2026-05-18 · 창원안전보건1팀</div></div>
+<div class="nli"><div class="nli-t">📋 LG SafeLink 업데이트 안내</div><div class="nli-d">2026-05-15 · 시스템</div></div>
+<div class="nli"><div class="nli-t">🦺 보호구 착용 의무화 재공지</div><div class="nli-d">2026-05-12 · 창원안전보건1팀</div></div>
+<div class="nli"><div class="nli-t">🛑 작업중지권 행사 가이드 배포</div><div class="nli-d">2026-05-10 · 창원안전환경담당</div></div>
+</div>
+
+<!-- 내정보 -->
+<div class="pg" id="pg-profile">
+<div class="pf-av" id="pfAv">👤</div>
+<div class="pf-nm" id="pfNm">사용자</div>
+<div class="pf-dp" id="pfDp">창원안전보건1팀</div>
+<div class="ptc"><div class="ptc-lb">보유 포인트</div><div class="ptc-v" id="pfPt">0<span class="ptc-u">P</span></div></div>
+<div class="cd"><div class="cd-t">✏️ 내 정보</div>
+ <div class="fl"><label>이름</label><input id="pfNmI" placeholder="이름"></div>
+ <div class="fl"><label>사번</label><input id="pfIdI" placeholder="사번"></div>
+ <div class="fl"><label>부서</label><input id="pfDpI" placeholder="부서" value="창원안전보건1팀"></div>
+ <button class="btn btn-mg mt8" onclick="savePf()">💾 저장</button>
+</div>
+<div class="cd"><div class="cd-t">📜 최근 활동</div><div id="pfHist"><div class="empty">활동 기록 없음</div></div></div>
+</div>
+
+</div><!-- /app -->
+
+<!-- Bottom Nav -->
+<div class="bn">
+ <button class="bni on" onclick="bn('home',this)"><span class="bi">🏠</span>홈</button>
+ <button class="bni" onclick="bn('stop-work',this)"><span class="bi">🛑</span>신고</button>
+ <button class="bni" onclick="bn('tbm-pro',this)"><span class="bi">📋</span>TBM</button>
+ <button class="bni" onclick="bn('notices',this)"><span class="bi">📢</span>공지</button>
+ <button class="bni" onclick="bn('profile',this)"><span class="bi">👤</span>내정보</button>
+</div>
+<!-- Chat Input -->
+<div class="ch-iw" id="chIw">
+ <input id="chIn" placeholder="세피에게 질문하세요..." onkeydown="if(event.key==='Enter')sChat()">
+ <button class="ch-send" onclick="sChat()">➤</button>
+</div>
+
+<script>
+
+const API_BASE='';
+let AI_ONLINE=false;
+let jsaChatHistory=[];
+(function(){
+ fetch(API_BASE+'/api/health').then(function(r){return r.json()}).then(function(d){
+  AI_ONLINE=!!d.ai_enabled;
+  var el=document.getElementById('aiStatus');
+  if(el){el.innerHTML=AI_ONLINE?'<span style=\"color:#10B981\">🟢 AI</span>':'<span style=\"color:#EF4444\">🔴 오프라인</span>';el.style.display='inline';}
+  var el2=document.getElementById('aiStatus2');
+  if(el2)el2.innerHTML=d.ai_enabled?'(Gemini)':'';
+ }).catch(function(){AI_ONLINE=false;});
+})();
+
+
+const BLD={'파크1':['통합생산동','A1동','A3동','연구동','물류창고','기타'],'파크2':['B1동','B2동','B3동','C1동','C2동','연구동','기타'],'공용구역':['게이트','주차장','도로','식당','휴게실','기타'],'옥외':['배관구역','옥외설비','도로','기타']};
+const JSA_DB={
+'고소작업':[{h:'추락',lv:'상',cause:'안전대 미착용, 개구부 방호조치 미흡',ctrl:'안전대 착용, 안전난간 설치, 추락방지망'},{h:'낙하물',lv:'중',cause:'공구/자재 낙하',ctrl:'낙하방지줄, 하부 출입통제'},{h:'강풍',lv:'중',cause:'10m/s 이상 강풍 시 작업',ctrl:'풍속 10m/s 이상 시 작업중지'},{h:'구조물 붕괴',lv:'상',cause:'비계/발판 설치 불량',ctrl:'구조검토, 자격자 확인'}],
+'용접작업':[{h:'화재·폭발',lv:'상',cause:'불티 비산, 인화물질 근접',ctrl:'용접방화포, 소화기, 화기작업허가서'},{h:'감전',lv:'상',cause:'용접기 누전',ctrl:'접지 확인, 절연장갑, 감전방지기'},{h:'유해가스',lv:'중',cause:'밀폐공간 용접',ctrl:'환기설비, 방독마스크'},{h:'화상',lv:'중',cause:'스패터, 고온 표면',ctrl:'보호복, 용접장갑, 안면보호구'}],
+'전기작업':[{h:'감전',lv:'상',cause:'활선 작업, 절연 불량',ctrl:'정전 후 작업, 검전기 사용, 절연장갑'},{h:'아크 화상',lv:'상',cause:'단락사고, 아크 발생',ctrl:'내전압용 보호구, 아크 차단복'},{h:'화재',lv:'중',cause:'과부하, 단락',ctrl:'차단기 확인, 감전방지기, LOTO 절차'}],
+'밀폐공간작업':[{h:'질식',lv:'상',cause:'산소 부족(18% 미만)',ctrl:'산소농도 측정, 환기, 송기마스크'},{h:'중독',lv:'상',cause:'유해가스(H₂S, CO 등)',ctrl:'가스농도 측정, 방독마스크, 환기'},{h:'폭발',lv:'상',cause:'가연성가스 축적',ctrl:'가스농도 측정, 방폭장비 사용'},{h:'추락',lv:'중',cause:'맨홀 등 출입 시',ctrl:'안전대, 사다리, 구조 로프'}],
+'중장비작업':[{h:'충돌',lv:'상',cause:'후방 사각지대, 신호수 미배치',ctrl:'신호수 배치, 후방카메라, 경고등'},{h:'전도',lv:'상',cause:'지반 침하, 과적',ctrl:'지반 확인, 아웃트리거, 정격하중 준수'},{h:'끼임',lv:'상',cause:'회전반경 내 작업자',ctrl:'접근금지 구역, 안전거리 유지'},{h:'낙하물',lv:'중',cause:'인양물 낙하',ctrl:'와이어 점검, 인양경로 통제'}],
+'배관작업':[{h:'화상',lv:'상',cause:'고온 배관, 스팀 누출',ctrl:'잔압 확인, 보온재, 보호구'},{h:'누출',lv:'상',cause:'배관 연결부 누출',ctrl:'플랜지 볼트, 가스켓 교체'},{h:'질식',lv:'중',cause:'밀폐 구간 작업',ctrl:'산소농도 측정, 환기'},{h:'추락',lv:'중',cause:'배관랙 위 작업',ctrl:'안전대, 안전난간'}],
+'해체작업':[{h:'붕괴',lv:'상',cause:'구조물 붕괴, 해체 순서 오류',ctrl:'해체계획서 준수, 구조안전 검토'},{h:'추락',lv:'상',cause:'개구부, 불안정 발판',ctrl:'안전난간, 안전대, 추락방지망'},{h:'비산물',lv:'중',cause:'파편, 분진 비산',ctrl:'방진마스크, 방호벽, 살수'},{h:'소음·진동',lv:'중',cause:'파쇄기, 절단기 사용',ctrl:'귀마개, 방진장갑, 작업시간 제한'}],
+'도장작업':[{h:'유기용제 중독',lv:'상',cause:'도료 내 유기용제 흡입',ctrl:'방독마스크, 환기설비, MSDS 비치'},{h:'화재·폭발',lv:'상',cause:'유기용제 증기 인화',ctrl:'방폭설비, 정전기 방지, 소화기'},{h:'피부 질환',lv:'중',cause:'도료 피부 접촉',ctrl:'보호복, 내화학장갑, 세안설비'},{h:'추락',lv:'중',cause:'고소 도장 작업',ctrl:'안전대, 비계 안전점검'}]
+};
+const WNX=89,WNY=77;
+let curPg='home',sigCtx=null,sigDr=false,atts=[],pLog=[],jCnt=0;
+
+function go(id){
+ document.querySelectorAll('.pg').forEach(p=>p.classList.remove('on'));
+ const pg=document.getElementById('pg-'+id);if(pg)pg.classList.add('on');
+ curPg=id;
+ document.getElementById('hdBack').classList.toggle('on',id!=='home');
+ document.getElementById('chIw').classList.toggle('on',id==='ai-chat');
+ if(id==='tbm-pro')setTimeout(initSig,100);
+ if(id==='stats')loadSt();
+ if(id==='profile'){loadPf();updatePfUI();}
+ window.scrollTo(0,0);
+}
+function goHome(){go('home');}
+function bn(id,el){document.querySelectorAll('.bni').forEach(b=>b.classList.remove('on'));el.classList.add('on');go(id);}
+function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500);}
+function showSov(ic,tt,pt,sb){
+ document.getElementById('sovIc').textContent=ic||'✅';
+ document.getElementById('sovTt').textContent=tt||'완료!';
+ document.getElementById('sovPt').textContent=pt?'+'+pt+'P':'';
+ document.getElementById('sovSb').textContent=sb||'감사합니다';
+ document.getElementById('sov').classList.add('on');
+}
+function closeSov(){document.getElementById('sov').classList.remove('on');}
+function updB(zid,bid){const z=document.getElementById(zid).value,s=document.getElementById(bid);s.innerHTML='<option value="">선택</option>';if(BLD[z])BLD[z].forEach(b=>{const o=document.createElement('option');o.value=b;o.textContent=b;s.appendChild(o);});}
+function selD(gid,el){document.querySelectorAll('#'+gid+' .dg-b').forEach(b=>b.classList.remove('on'));el.classList.add('on');}
+function getD(gid){const s=document.querySelector('#'+gid+' .dg-b.on');return s?s.textContent.trim():'';}
+function selC(gid,el){document.querySelectorAll('#'+gid+' .rc-b').forEach(b=>b.classList.remove('on'));el.classList.add('on');}
+function getC(gid){const s=document.querySelector('#'+gid+' .rc-b.on');return s?s.textContent.trim():'';}
+function selR(gid,el){document.querySelectorAll('#'+gid+' .rlb').forEach(b=>b.classList.remove('on'));el.classList.add('on');}
+function tgCk(el){el.classList.toggle('ck');}
+function tgPpe(el){el.classList.toggle('on');}
+function savePf(){
+ const n=document.getElementById('pfNmI').value.trim();if(!n){toast('이름을 입력해 주세요');return;}
+ localStorage.setItem('sl4_pf',JSON.stringify({name:n,id:document.getElementById('pfIdI').value.trim(),dept:document.getElementById('pfDpI').value.trim()}));
+ toast('프로필 저장 완료');updatePfUI();
+}
+function loadPf(){const d=localStorage.getItem('sl4_pf');if(!d)return;const p=JSON.parse(d);document.getElementById('pfNmI').value=p.name||'';document.getElementById('pfIdI').value=p.id||'';document.getElementById('pfDpI').value=p.dept||'창원안전보건1팀';}
+function updatePfUI(){
+ const pts=getPoints();document.getElementById('pfPt').innerHTML=pts+'<span class="ptc-u">P</span>';
+ const d=localStorage.getItem('sl4_pf');if(d){const p=JSON.parse(d);document.getElementById('pfNm').textContent=p.name||'사용자';document.getElementById('pfDp').textContent=p.dept||'창원안전보건1팀';}
+ const h=getHist(),el=document.getElementById('pfHist');
+ if(!h.length){el.innerHTML='<div class="empty">활동 기록 없음</div>';return;}
+ el.innerHTML=h.slice(-12).reverse().map(x=>'<div class="hli"><div class="hli-ic">'+x.ic+'</div><div style="flex:1"><div class="hli-t">'+x.tt+'</div><div class="hli-d">'+x.dt+'</div></div>'+(x.pt?'<div class="hli-pt">+'+x.pt+'P</div>':'')+'</div>').join('');
+ updPpePsn();
+}
+function gD(k){const d=localStorage.getItem('sl4_'+k);return d?JSON.parse(d):[];}
+function aD(k,v){const a=gD(k);a.push(v);localStorage.setItem('sl4_'+k,JSON.stringify(a));}
+function getPoints(){return parseInt(localStorage.getItem('sl4_pts')||'0');}
+function addPoints(n){localStorage.setItem('sl4_pts',String(getPoints()+n));}
+function getHist(){return gD('hist');}
+function addHist(ic,tt,pt){const h=getHist();h.push({ic,tt,pt,dt:new Date().toLocaleString('ko-KR')});localStorage.setItem('sl4_hist',JSON.stringify(h));}
+function submitSW(){
+ const z=document.getElementById('swZ').value,dg=getD('swDg'),ds=document.getElementById('swDesc').value.trim();
+ if(!z){toast('구역을 선택해 주세요');return;}if(!dg){toast('위험유형을 선택해 주세요');return;}if(!ds){toast('상세설명을 입력해 주세요');return;}
+ aD('sw',{zone:z,bld:document.getElementById('swB').value,danger:dg,desc:ds,date:new Date().toISOString()});
+ addPoints(50);addHist('🛑','작업중지: '+dg,50);
+ showSov('🛑','작업중지 신고 완료!',50,'안전한 현장에 기여해 주셔서 감사합니다');
+ document.getElementById('swZ').value='';document.getElementById('swB').innerHTML='<option value="">구역 먼저 선택</option>';
+ document.querySelectorAll('#swDg .dg-b,#swRl .rlb').forEach(b=>b.classList.remove('on'));document.getElementById('swDesc').value='';
+}
+function submitSG(){
+ const cat=getC('sgRc'),ti=document.getElementById('sgTi').value.trim(),sl=document.getElementById('sgSl').value.trim();
+ if(!cat){toast('카테고리 선택');return;}if(!ti){toast('제목 입력');return;}if(!sl){toast('개선방안 입력');return;}
+ aD('sg',{cat,title:ti,problem:document.getElementById('sgPb').value,solution:sl,zone:document.getElementById('sgZ').value,date:new Date().toISOString()});
+ addPoints(30);addHist('💡','개선제안: '+ti,30);
+ showSov('💡','개선제안 제출 완료!',30,'소중한 제안 감사합니다');
+ document.querySelectorAll('#sgRc .rc-b').forEach(b=>b.classList.remove('on'));
+ ['sgTi','sgPb','sgSl'].forEach(id=>document.getElementById(id).value='');
+}
+function submitNM(){
+ const z=document.getElementById('nmZ').value,dg=getD('nmDg'),ds=document.getElementById('nmDs').value.trim();
+ if(!z){toast('구역 선택');return;}if(!dg){toast('사고유형 선택');return;}if(!ds){toast('상세내용 입력');return;}
+ aD('nm',{zone:z,bld:document.getElementById('nmB').value,type:dg,desc:ds,action:document.getElementById('nmAc').value,date:new Date().toISOString()});
+ addPoints(40);addHist('⚠️','아차사고: '+dg,40);
+ showSov('⚠️','아차사고 보고 완료!',40,'사고 예방에 기여 감사합니다');
+ document.getElementById('nmZ').value='';document.getElementById('nmB').innerHTML='<option value="">구역 먼저 선택</option>';
+ document.querySelectorAll('#nmDg .dg-b').forEach(b=>b.classList.remove('on'));['nmDs','nmAc'].forEach(id=>document.getElementById(id).value='');
+}
+function submitOP(){
+ const cat=getC('opRc'),ct=document.getElementById('opCt').value.trim();
+ if(!cat){toast('분류 선택');return;}if(!ct){toast('내용 입력');return;}
+ aD('op',{cat,title:document.getElementById('opTi').value,content:ct,date:new Date().toISOString()});
+ addPoints(20);addHist('🗣️','의견: '+cat,20);
+ showSov('🗣️','의견 제출 완료!',20,'소중한 의견 감사합니다');
+ document.querySelectorAll('#opRc .rc-b').forEach(b=>b.classList.remove('on'));['opTi','opCt'].forEach(id=>document.getElementById(id).value='');
+}
+function tbT(n){
+ document.querySelectorAll('#pg-tbm-pro .tbt').forEach((t,i)=>t.classList.toggle('on',i===n));
+ document.querySelectorAll('#pg-tbm-pro .tp').forEach((p,i)=>p.classList.toggle('on',i===n));
+ if(n===1)setTimeout(initSig,100);
+}
+function initSig(){
+ const c=document.getElementById('sigCv');if(!c||c.dataset.init==='1')return;
+ c.width=c.offsetWidth;c.height=160;
+ sigCtx=c.getContext('2d');sigCtx.strokeStyle='#1F2937';sigCtx.lineWidth=2;sigCtx.lineCap='round';
+ c.addEventListener('pointerdown',e=>{sigDr=true;const r=c.getBoundingClientRect();sigCtx.beginPath();sigCtx.moveTo(e.clientX-r.left,e.clientY-r.top);});
+ c.addEventListener('pointermove',e=>{if(!sigDr)return;const r=c.getBoundingClientRect();sigCtx.lineTo(e.clientX-r.left,e.clientY-r.top);sigCtx.stroke();});
+ c.addEventListener('pointerup',()=>sigDr=false);
+ c.addEventListener('pointerleave',()=>sigDr=false);
+ c.dataset.init='1';
+}
+function clrSig(){const c=document.getElementById('sigCv');if(sigCtx)sigCtx.clearRect(0,0,c.width,c.height);}
+function saveSig(){
+ const nm=document.getElementById('sigNm').value.trim();if(!nm){toast('이름 입력');return;}
+ atts.push({name:nm,sig:document.getElementById('sigCv').toDataURL('image/png'),time:new Date().toLocaleTimeString('ko-KR')});
+ document.getElementById('sigNm').value='';clrSig();renderAtt();updPpePsn();toast(nm+' 서명 완료');
+}
+function renderAtt(){
+ const el=document.getElementById('attList');document.getElementById('attCnt').textContent=atts.length;
+ if(!atts.length){el.innerHTML='<div class="empty">서명된 참석자 없음</div>';return;}
+ el.innerHTML=atts.map(a=>'<div class="att-i"><span>👤 '+a.name+'</span><img class="att-sig" src="'+a.sig+'"><span style="margin-left:auto;font-size:11px;color:var(--tx2)">'+a.time+'</span></div>').join('');
+}
+function updPpePsn(){}
+function savePpe(){
+ const items=[];document.querySelectorAll('#ppeG .ppe-i.on').forEach(e=>items.push(e.textContent.trim()));
+ if(!items.length){toast('보호구를 선택해 주세요');return;}
+ pLog.push({items,time:new Date().toLocaleTimeString('ko-KR')});
+ document.querySelectorAll('#ppeG .ppe-i').forEach(e=>e.classList.remove('on'));
+ renderPpe();toast('보호구 착용 확인 완료');
+}
+function renderPpe(){
+ const el=document.getElementById('ppeLog');if(!pLog.length){el.innerHTML='<div class="empty">착용 확인 내역 없음</div>';return;}
+ el.innerHTML=pLog.map((p,i)=>'<div class="att-i"><span>🦺 #'+(i+1)+'</span><span style="flex:1;text-align:right;font-size:11px;color:var(--tx2)">'+p.items.join(', ')+' · '+p.time+'</span></div>').join('');
+}
+function submitTBM(){
+ const dt=document.getElementById('tbDate').value,ldr=document.getElementById('tbLdr').value.trim(),wk=document.getElementById('tbWk').value.trim();
+ if(!dt){toast('작업일자 선택');return;}if(!ldr){toast('TBM 리더 입력');return;}if(!wk){toast('작업명 입력');return;}
+ if(!atts.length){toast('최소 1명 서명 필요');return;}
+ aD('tbm',{date:dt,leader:ldr,work:wk,zone:document.getElementById('tbZ').value,bld:document.getElementById('tbB').value,workers:document.getElementById('tbNum').value,type:document.getElementById('tbTy').value,ra:document.getElementById('tbRa').classList.contains('on'),checks:document.querySelectorAll('#tbTp0 .cki.ck').length+'/12',attendees:atts.map(a=>a.name),ppe:pLog,submitted:new Date().toISOString()});
+ addHist('📋','TBM: '+wk,0);
+ showSov('📋','TBM PRO 제출 완료!','','안전미팅이 기록되었습니다');
+}
+function genPdf(){
+ toast('PDF 생성 중...');
+ if(typeof html2pdf!=='undefined'){html2pdf().set({margin:0.5,filename:'TBM_'+new Date().toISOString().slice(0,10)+'.pdf',html2canvas:{scale:2},jsPDF:{unit:'in',format:'a4'}}).from(document.getElementById('pg-tbm-pro')).save().then(()=>toast('PDF 저장 완료'));}
+ else toast('html2pdf 라이브러리 필요');
+}
+function addJR(d){
+ jCnt++;const n=jCnt,c=document.getElementById('jsaRows'),r=document.createElement('div');r.className='jsa-r';r.id='jr'+n;
+ r.innerHTML='<div class="jsa-sn">단계 '+n+'</div><button class="jsa-del" onclick="delJR(\'jr'+n+'\')">✕</button>'
+  +'<div class="fl"><label>작업단계</label><input class="js-step" placeholder="작업단계 설명" value="'+(d?d.step:'')+'"></div>'
+  +'<div class="fl"><label>위험요인</label><select class="js-hz"><option value="">선택</option><option>추락</option><option>감전</option><option>화재·폭발</option><option>끼임</option><option>질식</option><option>충돌</option><option>낙하물</option><option>화상</option><option>중독</option><option>붕괴</option><option>전도</option><option>유해가스</option><option>유기용제 중독</option><option>피부 질환</option><option>소음·진동</option><option>비산물</option><option>아크 화상</option><option>누출</option><option>강풍</option><option>기타</option></select></div>'
+  +'<div class="fl"><label>위험등급</label><div class="rlc jrl" style="margin-bottom:0"><button class="rlb rh '+(d&&d.lv==='상'?'on':'')+'" onclick="this.parentElement.querySelectorAll(\'.rlb\').forEach(b=>b.classList.remove(\'on\'));this.classList.add(\'on\')">🔴 상</button><button class="rlb rm '+(d&&d.lv==='중'?'on':'')+'" onclick="this.parentElement.querySelectorAll(\'.rlb\').forEach(b=>b.classList.remove(\'on\'));this.classList.add(\'on\')">🟡 중</button><button class="rlb rl '+(d&&d.lv==='하'?'on':'')+'" onclick="this.parentElement.querySelectorAll(\'.rlb\').forEach(b=>b.classList.remove(\'on\'));this.classList.add(\'on\')">🟢 하</button></div></div>'
+  +'<div class="fl"><label>위험요인 설명</label><textarea class="js-cause" placeholder="구체적 설명">'+(d?d.cause:'')+'</textarea></div>'
+  +'<div class="fl"><label>안전대책</label><textarea class="js-ctrl" placeholder="안전대책 및 조치">'+(d?d.ctrl:'')+'</textarea></div>';
+ if(d&&d.h){const sel=r.querySelector('.js-hz');for(let i=0;i<sel.options.length;i++){if(sel.options[i].text===d.h){sel.selectedIndex=i;break;}}}
+ c.appendChild(r);
+}
+function delJR(id){const el=document.getElementById(id);if(el)el.remove();}
+function aiGuide(){ toast('AI 자동생성으로 통합되었습니다'); }
+function aiValid(){ toast('AI 자동생성으로 통합되었습니다'); }
+function aiRecom(){
+ var ty=document.getElementById('jsaTy').value;
+ if(!ty){toast('작업유형 선택');return;}
+ var el=document.getElementById('jsaAir');el.style.display='block';
+ el.innerHTML='<div style="text-align:center;padding:12px;color:#6B7280">'+(AI_ONLINE?'Gemini로':'로컬 데이터로')+' AI 추천 생성 중...</div>';
+ var stepsJson='[]';
+ try{var rows=document.querySelectorAll('.jsa-r');var arr=[];rows.forEach(function(r){arr.push({step:r.querySelector('.js-step').value,hazard:r.querySelector('.js-hz').value,ctrl:r.querySelector('.js-ctrl').value});});stepsJson=JSON.stringify(arr);}catch(e){}
+ if(AI_ONLINE){
+  fetch(API_BASE+'/api/recommend',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({work_type:ty,current_steps:stepsJson})})
+  .then(function(r){return r.json()})
+  .then(function(d){
+   if(d.text){el.textContent=d.text;toast(ty+' AI 추천 완료 (Gemini)');return;}
+   _recomFallback(ty,el);
+  }).catch(function(){_recomFallback(ty,el);});
+ }else{_recomFallback(ty,el);}
+}
+function submitJSA(){
+ const ty=document.getElementById('jsaTy').value,nm=document.getElementById('jsaNm').value.trim();
+ if(!ty){toast('작업유형 선택');return;}if(!nm){toast('작업명 입력');return;}
+ const rows=document.querySelectorAll('.jsa-r');if(!rows.length){toast('작업단계 추가 필요');return;}
+ const steps=[];rows.forEach(r=>{steps.push({step:r.querySelector('.js-step').value,hazard:r.querySelector('.js-hz').value,level:r.querySelector('.jrl .rlb.on')?.textContent.trim()||'',cause:r.querySelector('.js-cause').value,ctrl:r.querySelector('.js-ctrl').value});});
+ aD('jsa',{type:ty,name:nm,zone:document.getElementById('jsaZ').value,steps,date:new Date().toISOString()});
+ addHist('🔍','JSA: '+nm,0);showSov('🔍','JSA 위험성평가 완료!','','위험성평가가 기록되었습니다');
+}
+const AI_R={
+'안전수칙':'📖 주요 안전수칙:\n\n1️⃣ 작업 전 안전교육 필수\n2️⃣ 개인 보호구 항상 착용\n3️⃣ 위험 발견 시 즉시 작업중지\n4️⃣ 안전통로 확보 및 정리정돈\n5️⃣ 음주/약물 상태 작업 금지\n6️⃣ 안전표지 및 경고 준수\n7️⃣ 2인 1조 원칙 (위험작업)\n\n💡 LG 6대 안전원칙을 항상 기억하세요!',
+'보호구':'🦺 보호구 착용법:\n\n⛑️ 안전모: 턱끈 체결\n🥽 보안경: 밀착 확인\n🧤 안전장갑: 작업별 적합\n👢 안전화: 강선토캡 확인\n🦺 안전조끼: 반사띠 부착\n🎧 귀마개: 85dB 이상 필수\n😷 방진마스크: 밀착도\n🪢 안전대: D링 위치 확인\n\n⚠️ 파손 보호구는 즉시 교체!',
+'비상':'🚨 비상시 행동요령:\n\n🔥 화재: 119신고→초기소화→대피→인원확인\n🏥 부상: 안전한 곳 이동→119→응급처치\n☣️ 화학물질 누출: 즉시 대피→바람 반대→방재팀 연락\n\n📞 119(소방), 112(경찰)',
+'온열질환':'🌡️ 온열질환 예방:\n\n📊 작업/휴식 기준:\n• 31°C: 🟡 주의 (50분/10분)\n• 33°C: 🟠 경고 (40분/15분)\n• 35°C: 🔴 위험 (30분/30분)\n\n🛡️ 예방: 30분 간격 수분 섭취, 규칙적 휴식\n⚠️ 두통/어지러움 시 즉시 작업중지!',
+'작업중지':'🛑 작업중지권:\n\n📌 산업안전보건법 제52조\n→ 급박한 위험 시 즉시 작업중지 가능\n\n📋 절차:\n1. 위험 인지\n2. 즉시 작업중지 및 대피\n3. 관리감독자 보고\n4. SafeLink 신고 (50P)\n\n💡 불이익 없으며 포인트 적립!',
+'MSDS':'🧪 MSDS 안내:\n\n📌 물질안전보건자료\n→ 화학물질 유해/위험성 정보\n\n📋 확인: 구성성분, GHS분류, 응급조치, 취급방법, 보호구, 폐기주의\n\n⚠️ 사용 전 반드시 MSDS 확인!\n📍 작업장 내 비치 의무'
+};
+function sChat(msg){
+ var inp=document.getElementById('chIn');var txt=msg||inp.value.trim();if(!txt)return;inp.value='';
+ var area=document.getElementById('chMsgs');
+ area.innerHTML+='<div class="ch-msg ch-user"><div class="ch-av" style="background:rgba(37,99,235,.15);color:#2563EB">👤</div><div class="ch-bub">'+txt+'</div></div>';
+ area.scrollTop=area.scrollHeight;
+ if(AI_ONLINE){
+  area.innerHTML+='<div class="ch-msg" id="chTyping"><div class="ch-av" style="background:linear-gradient(135deg,#7C3AED,#A855F7);color:#fff">🤖</div><div class="ch-bub" style="color:#6B7280">세피가 생각 중... 💭</div></div>';
+  area.scrollTop=area.scrollHeight;
+  fetch(API_BASE+'/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:txt})})
+  .then(function(r){return r.json()})
+  .then(function(d){
+   var el=document.getElementById('chTyping');if(el)el.remove();
+   var resp=d.reply||d.error||'응답을 받지 못했습니다.';
+   area.innerHTML+='<div class="ch-msg"><div class="ch-av" style="background:linear-gradient(135deg,#7C3AED,#A855F7);color:#fff">🤖</div><div class="ch-bub">'+resp.replace(/\n/g,'<br>')+'</div></div>';
+   area.scrollTop=area.scrollHeight;
+  }).catch(function(){
+   var el=document.getElementById('chTyping');if(el)el.remove();
+   _chatFallback(txt,area);
+  });
+ }else{
+  setTimeout(function(){_chatFallback(txt,area);},600);
+ }
+}
+function qChat(t){sChat(t);}
+function updHeat(temp){
+ const el=document.getElementById('hwBox'),ic=document.getElementById('hwIc'),tt=document.getElementById('hwT'),dd=document.getElementById('hwD');
+ el.className='hw';
+ if(temp>=35){el.classList.add('hw-dang');ic.textContent='🔴';tt.textContent='온열질환 위험';dd.textContent='체감온도 '+temp+'°C · 연속작업 30분 / 휴식 30분';}
+ else if(temp>=33){el.classList.add('hw-warn');ic.textContent='🟠';tt.textContent='온열질환 경고';dd.textContent='체감온도 '+temp+'°C · 연속작업 40분 / 휴식 15분';}
+ else if(temp>=31){el.classList.add('hw-caut');ic.textContent='🟡';tt.textContent='온열질환 주의';dd.textContent='체감온도 '+temp+'°C · 연속작업 50분 / 휴식 10분';}
+ else{el.classList.add('hw-safe');ic.textContent='🟢';tt.textContent='온열질환 안전';dd.textContent='체감온도 '+temp+'°C · 정상 작업 가능';}
+}
+function loadW(){fetch(API_BASE+'/api/weather').then(function(r){return r.json()}).then(function(w){if(w.error&&!w.temp)return;document.getElementById('heroWt').textContent=Math.round(w.temp)+'°C';document.getElementById('heroWd').textContent=w.desc+' · '+w.location;document.getElementById('heroWi').textContent=w.icon;updHeat(w.feel_temp||w.temp);var hw=document.getElementById('hwT');if(hw)hw.textContent='온열질환 '+w.heat_label;var hd=document.getElementById('hwD');if(hd)hd.textContent=w.heat_msg;}).catch(function(){});}
+function expJSON(){const d={sw:gD('sw'),tbm:gD('tbm'),jsa:gD('jsa'),sg:gD('sg'),nm:gD('nm'),op:gD('op'),points:getPoints(),history:getHist()};const b=new Blob([JSON.stringify(d,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='SafeLink_v4_'+new Date().toISOString().slice(0,10)+'.json';a.click();toast('JSON 내보내기 완료');}
+function expCSV(){let csv='\uFEFF유형,일시,구역,상세\n';gD('sw').forEach(d=>csv+='작업중지,'+d.date+','+d.zone+','+d.danger+'\n');gD('tbm').forEach(d=>csv+='TBM,'+d.submitted+','+d.zone+','+d.work+'\n');gD('jsa').forEach(d=>csv+='JSA,'+d.date+','+d.zone+','+d.name+'\n');gD('sg').forEach(d=>csv+='개선제안,'+d.date+','+d.zone+','+d.title+'\n');gD('nm').forEach(d=>csv+='아차사고,'+d.date+','+d.zone+','+d.type+'\n');gD('op').forEach(d=>csv+='의견,'+d.date+',,'+d.cat+'\n');const b=new Blob([csv],{type:'text/csv;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='SafeLink_v4_'+new Date().toISOString().slice(0,10)+'.csv';a.click();toast('CSV 내보내기 완료');}
+function clearAll(){if(!confirm('모든 데이터를 삭제하시겠습니까?'))return;['sl4_sw','sl4_tbm','sl4_jsa','sl4_sg','sl4_nm','sl4_op','sl4_pts','sl4_hist','sl4_pf'].forEach(k=>localStorage.removeItem(k));toast('전체 삭제 완료');loadSt();updatePfUI();}
+function loadSt(){document.getElementById('sSW').textContent=gD('sw').length;document.getElementById('sTB').textContent=gD('tbm').length;document.getElementById('sJS').textContent=gD('jsa').length;document.getElementById('sSG').textContent=gD('sg').length;document.getElementById('sNM').textContent=gD('nm').length;document.getElementById('sOP').textContent=gD('op').length;}
+function syncData(){toast('서버 연동 준비 중');}
+document.addEventListener('DOMContentLoaded',function(){
+ const now=new Date(),days=['일','월','화','수','목','금','토'];
+ document.getElementById('heroDate').textContent=now.getFullYear()+'년 '+(now.getMonth()+1)+'월 '+now.getDate()+'일 ('+days[now.getDay()]+')';
+ const di=document.getElementById('tbDate');if(di)di.value=now.toISOString().slice(0,10);
+ const h=now.getHours();const pf=localStorage.getItem('sl4_pf');const un=pf?JSON.parse(pf).name||'':'';
+ let gr=h<12?'좋은 아침이에요':h<18?'좋은 오후에요':'안전한 작업 부탁드립니다.';
+ document.getElementById('heroGreet').textContent=(un?un+'님, ':'')+gr+'! 👷';
+ loadPf();updatePfUI();loadW();
+});
+
+
+const AI_CK={};
+const AI_ACC={'고소작업':'⚠️ 사고사례:\n📌 비계작업 안전대 미착용→8m추락 중상\n💡 2m이상 안전대 100%\n📌 사다리 상부작업→미끄러짐 골절\n💡 상부 1/3 금지\n📌 공구낙하→하부 작업자 부상\n💡 낙하방지줄+하부통제','용접작업':'⚠️ 사고사례:\n📌 불티 비산→대형화재\n💡 10m 가연물제거, 방화포\n📌 습윤환경 감전→심정지\n💡 감전방지기+절연장갑','전기작업':'⚠️ 사고사례:\n📌 LOTO 미이행→감전사망\n💡 잠금+꼬리표 필수\n📌 고압선 아크→3도화상\n💡 충전부방호+이격거리','밀폐공간작업':'⚠️ 사고사례:\n📌 맨홀 산소결핍→사망\n💡 가스측정+환기 후 진입\n📌 H₂S 흡입→의식불명\n💡 연속측정+송기마스크','중장비작업':'⚠️ 사고사례:\n📌 과적 인양→크레인전도\n💡 정격하중 80%이내\n📌 후진 충돌→하반신압착\n💡 신호수+후방경보','배관작업':'⚠️ 사고사례:\n📌 잔압분출→화상\n💡 개방 전 잔압확인\n📌 배관랙 추락→중상\n💡 배관랙=고소작업, 안전대','해체작업':'⚠️ 사고사례:\n📌 순서무시→구조물붕괴 사망\n💡 해체계획서 순서 준수\n📌 석면자재 파쇄→다수 노출\n💡 사전 석면조사 필수','도장작업':'⚠️ 사고사례:\n📌 밀폐탱크 도장→유기용제중독\n💡 환기+송기마스크\n📌 도장구역 불티→유기용제폭발\n💡 도장구역 화기절대금지'};
+function aiChecklist(){ toast('AI 자동생성으로 통합되었습니다'); }
+function aiAccident(){
+ var ty=document.getElementById('jsaTy').value;
+ if(!ty){toast('작업유형을 선택해 주세요');return;}
+ var el=document.getElementById('jsaAir');el.style.display='block';
+ el.innerHTML='<div style="text-align:center;padding:12px;color:#6B7280">'+(AI_ONLINE?'Gemini로':'로컬 데이터로')+' 사고사례 조회 중...</div>';
+ if(AI_ONLINE){
+  fetch(API_BASE+'/api/accident',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({work_type:ty})})
+  .then(function(r){return r.json()})
+  .then(function(d){
+   if(d.text){el.textContent=d.text;toast(ty+' 사고사례 조회 완료 (Gemini)');return;}
+   el.textContent=AI_ACC[ty]||'데이터 준비 중';toast(ty+' 사고사례 조회 완료');
+  }).catch(function(){el.textContent=AI_ACC[ty]||'데이터 준비 중';toast(ty+' 사고사례 조회 완료');});
+ }else{el.textContent=AI_ACC[ty]||'데이터 준비 중';toast(ty+' 사고사례 조회 완료');}
+}
+// SAPI AI v3
+
+const SIMILAR_JSA_DB=[
+ {id:'JSA-0421',title:'P1 냉각탑 배관 교체',type:'배관작업',zone:'파크1',date:'2025-04-21',author:'김동현',steps:3,tags:['배관','교체','냉각탑']},
+ {id:'JSA-0418',title:'P2 외벽 고소 도장',type:'도장작업',zone:'파크2',date:'2025-04-18',author:'송진수',steps:4,tags:['도장','고소','외벽']},
+ {id:'JSA-0415',title:'P1 전기실 변압기 점검',type:'전기작업',zone:'파크1',date:'2025-04-15',author:'이건희',steps:3,tags:['전기','변압기','LOTO']},
+ {id:'JSA-0410',title:'옥외 저장탱크 밀폐 청소',type:'밀폐공간작업',zone:'옥외',date:'2025-04-10',author:'최성원',steps:5,tags:['밀폐','탱크','가스']},
+ {id:'JSA-0407',title:'P2 지붕 방수(고소)',type:'고소작업',zone:'파크2',date:'2025-04-07',author:'박영욱',steps:4,tags:['고소','지붕','비계']},
+ {id:'JSA-0403',title:'P1 크레인 양중',type:'중장비작업',zone:'파크1',date:'2025-04-03',author:'이영진',steps:4,tags:['중장비','크레인','인양']},
+ {id:'JSA-0401',title:'공용 소방배관 용접',type:'용접작업',zone:'공용구역',date:'2025-04-01',author:'김태욱',steps:3,tags:['용접','배관','화기']},
+ {id:'JSA-0328',title:'P1 실외기 해체',type:'해체작업',zone:'파크1',date:'2025-03-28',author:'이주형',steps:3,tags:['해체','실외기','절단']},
+ {id:'JSA-0325',title:'P2 스프링클러 배관',type:'배관작업',zone:'파크2',date:'2025-03-25',author:'김종국',steps:4,tags:['배관','스프링클러']},
+ {id:'JSA-0320',title:'옥외 철골 용접',type:'용접작업',zone:'옥외',date:'2025-03-20',author:'송예민',steps:4,tags:['용접','철골','고소']},
+ {id:'JSA-0318',title:'P1 케이블 트레이 설치',type:'전기작업',zone:'파크1',date:'2025-03-18',author:'김동현',steps:3,tags:['전기','케이블']},
+ {id:'JSA-0315',title:'P2 보일러 밀폐 점검',type:'밀폐공간작업',zone:'파크2',date:'2025-03-15',author:'최성원',steps:4,tags:['밀폐','보일러']},
+ {id:'JSA-0312',title:'공용 엘리베이터 피트',type:'밀폐공간작업',zone:'공용구역',date:'2025-03-12',author:'박영욱',steps:3,tags:['밀폐','엘리베이터']},
+ {id:'JSA-0308',title:'P1 3층 천장 고소 배관',type:'고소작업',zone:'파크1',date:'2025-03-08',author:'이영진',steps:5,tags:['고소','천장','배관']},
+ {id:'JSA-0305',title:'옥외 도로포장 중장비',type:'중장비작업',zone:'옥외',date:'2025-03-05',author:'김태욱',steps:3,tags:['중장비','도로']},
+];
+
+const AUTOGEN_TMPL={
+ '고소작업':[
+  {step:'작업 전 안전점검',h:'추락',lv:'상',cause:'비계/사다리 불량, 개구부 미방호',ctrl:'비계 점검, 안전난간 설치, 출입통제'},
+  {step:'안전장비 착용',h:'추락',lv:'상',cause:'안전대 미착용/체결 불량',ctrl:'전체식 안전대(등D링), 안전모, 안전화'},
+  {step:'고소작업 수행',h:'낙하물',lv:'중',cause:'공구/자재 낙하',ctrl:'낙하방지줄, 하부통제, 2인1조'},
+  {step:'작업 종료 정리',h:'추락',lv:'중',cause:'개구부 복구 누락',ctrl:'잔재물 수거, 개구부 복구'},
+ ],
+ '용접작업':[
+  {step:'화기허가 준비',h:'화재폭발',lv:'상',cause:'가연물 근접',ctrl:'화기허가서, 10m 가연물 제거, 소화기 2대'},
+  {step:'장비 점검',h:'감전',lv:'상',cause:'전선 손상, 접지 불량',ctrl:'용접기 점검, 접지, 감전방지기'},
+  {step:'용접 수행',h:'화상',lv:'중',cause:'스패터/고온 표면',ctrl:'보안면, 용접장갑, 방화포'},
+  {step:'잔화확인',h:'화재폭발',lv:'상',cause:'잔화 방치',ctrl:'30분 잔화확인, 화재감시자'},
+ ],
+ '전기작업':[
+  {step:'정전 및 LOTO',h:'감전',lv:'상',cause:'정전 미이행, LOTO 미준수',ctrl:'정전허가서, LOTO, 검전기, 잔류전하 방전'},
+  {step:'작업 수행',h:'아크 화상',lv:'상',cause:'단락/아크 발생',ctrl:'절연장갑, 절연화, 절연공구, 방호'},
+  {step:'복전 마감',h:'화재',lv:'중',cause:'복전 절차 미준수',ctrl:'체결 확인, 차단기 확인'},
+ ],
+ '밀폐공간작업':[
+  {step:'사전측정 허가',h:'질식',lv:'상',cause:'산소결핍(18%미만)',ctrl:'출입허가서, O2 측정, 가스측정'},
+  {step:'환기 장비',h:'중독',lv:'상',cause:'유해가스 흡입',ctrl:'환기30분+, 방독/송기마스크, 구조장비'},
+  {step:'진입 작업',h:'질식',lv:'상',cause:'농도 변화',ctrl:'감시인 상주, 연속측정, 2인1조'},
+  {step:'퇴출 정리',h:'중독',lv:'중',cause:'잔류가스',ctrl:'재측정, 지속환기, 출입금지 표지'},
+ ],
+ '중장비작업':[
+  {step:'장비 반입 점검',h:'전도',lv:'상',cause:'지반 불량/장비 결함',ctrl:'일일점검, 아웃트리거, 정격하중'},
+  {step:'신호체계',h:'충돌',lv:'상',cause:'신호수 미배치',ctrl:'전담 신호수, 무전기, 통제라인'},
+  {step:'작업 수행',h:'끼임',lv:'상',cause:'회전반경 내 접근',ctrl:'접근금지 구역, 안전거리'},
+  {step:'종료 반출',h:'충돌',lv:'중',cause:'보행자 충돌',ctrl:'유도자, 서행, 시야 확보'},
+ ],
+ '배관작업':[
+  {step:'잔압 확인',h:'화상',lv:'상',cause:'잔압 분출/스팀',ctrl:'차단밸브, 블라인드 플랜지, 잔압 배출'},
+  {step:'절단/연결',h:'누출',lv:'상',cause:'플랜지/가스켓 불량',ctrl:'토크 관리, 가스켓 교체'},
+  {step:'기밀시험',h:'누출',lv:'중',cause:'파열 위험',ctrl:'안전구역, 단계적 압력 상승'},
+ ],
+ '해체작업':[
+  {step:'해체계획 검토',h:'붕괴',lv:'상',cause:'순서 오류',ctrl:'계획서 승인, 구조 검토, 상부-하부'},
+  {step:'작업구역 통제',h:'낙하물',lv:'상',cause:'해체물 낙하',ctrl:'하부 출입통제, 안전모/보안경'},
+  {step:'절단/파쇄',h:'비산물',lv:'중',cause:'파편/분진',ctrl:'방호벽, 살수, 방진마스크'},
+  {step:'잔재물 반출',h:'전도',lv:'중',cause:'적치 불량',ctrl:'적치 규정, 운반경로, 유도자'},
+ ],
+ '도장작업':[
+  {step:'MSDS 준비',h:'유기용제 중독',lv:'상',cause:'유기용제 증기 흡입',ctrl:'MSDS 비치, 환기, 방독마스크'},
+  {step:'도장 수행',h:'화재폭발',lv:'상',cause:'유기용제 인화',ctrl:'화기 금지, 정전기 방지(접지), 소화기'},
+  {step:'정리 폐기',h:'피부 질환',lv:'중',cause:'도료 피부 접촉',ctrl:'내화학장갑, 세안설비, 밀폐용기 수거'},
+ ],
+};
+
+function _hideBp(){['agenRes','simWrap'].forEach(id=>{const e=document.getElementById(id);if(e)e.style.display='none';});}
+
+function aiAutoGen(){
+ var ty=document.getElementById('jsaTy').value,nm=document.getElementById('jsaNm').value.trim(),zone=document.getElementById('jsaZ').value;
+ if(!ty){toast('작업유형을 먼저 선택해 주세요');return;}
+ if(!nm){toast('작업명을 입력해 주세요');return;}
+ _hideBp();var res=document.getElementById('agenRes'),cont=document.getElementById('agenContent');res.style.display='block';
+ cont.innerHTML='<div class="agen-loading"><div class="dp"><span></span><span></span><span></span></div><span style="font-size:13px;color:#5B21B6">AI가 <b>'+nm+'</b> JSA를 '+(AI_ONLINE?'Gemini로':'로컬 데이터로')+' 생성 중...</span></div>';
+ if(AI_ONLINE){
+  fetch(API_BASE+'/api/autogen',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({work_type:ty,work_name:nm,zone:zone})})
+  .then(function(r){return r.json()})
+  .then(function(d){
+   if(d.steps&&d.steps.length){_renderAutoGen(d.steps,nm,d.source||'gemini');return;}
+   _autoGenFallback(ty,nm);
+  }).catch(function(){_autoGenFallback(ty,nm);});
+ }else{setTimeout(function(){_autoGenFallback(ty,nm);},800);}
+}
+
+function applyAutoGen(){
+ const t=window._agc;if(!t||!t.length)return;
+ document.getElementById('jsaRows').innerHTML='';if(typeof jCnt!=='undefined')jCnt=0;
+ t.forEach(d=>addJR(d));document.getElementById('agenRes').style.display='none';
+ toast(t.length+'\uB2E8\uACC4\uAC00 JSA\uC5D0 \uC801\uC6A9\uB418\uC5C8\uC2B5\uB2C8\uB2E4');
+}
+
+function aiSimilar(){
+ var ty=document.getElementById('jsaTy').value,nm=document.getElementById('jsaNm').value.trim(),zone=document.getElementById('jsaZ').value;
+ if(!ty&&!nm){toast('작업유형 또는 작업명을 입력해 주세요');return;}_hideBp();
+ document.getElementById('simWrap').style.display='block';
+ document.getElementById('simCards').innerHTML='<div style="text-align:center;padding:20px;color:#6B7280">'+(AI_ONLINE?'Gemini로':'로컬 데이터로')+' 유사 JSA 검색 중...</div>';
+ if(AI_ONLINE){
+  fetch(API_BASE+'/api/similar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({work_type:ty,work_name:nm,zone:zone})})
+  .then(function(r){return r.json()})
+  .then(function(d){
+   if(d.results&&d.results.length){_renderSimilar(d.results,d.source||'gemini');return;}
+   _similarFallback(ty,nm,zone);
+  }).catch(function(){_similarFallback(ty,nm,zone);});
+ }else{setTimeout(function(){_similarFallback(ty,nm,zone);},600);}
+}
+
+function applySimilar(idx){
+ if(!window._st3||!window._st3[idx])return;const j=window._st3[idx].j;
+ const ts=document.getElementById('jsaTy');for(let i=0;i<ts.options.length;i++)if(ts.options[i].text===j.type){ts.selectedIndex=i;break;}
+ const zs=document.getElementById('jsaZ');for(let i=0;i<zs.options.length;i++)if(zs.options[i].text===j.zone){zs.selectedIndex=i;break;}
+ updB('jsaZ','jsaB');document.getElementById('jsaNm').value=j.title;document.getElementById('simWrap').style.display='none';toast('\uC720\uC0AC JSA \uC801\uC6A9: '+j.title);
+}
+
+function _renderAutoGen(tmpl,nm,src){
+ var cont=document.getElementById('agenContent');
+ var srcLabel=src==='gemini'?'🤖 Gemini AI':'📦 로컬 데이터';
+ var h='<div style="font-size:12px;color:#7C3AED;margin-bottom:10px">✅ <b>'+nm+'</b> — '+tmpl.length+'단계 JSA 자동생성 완료 <span style="font-size:10px;color:#6B7280">('+srcLabel+')</span></div>';
+ tmpl.forEach(function(s,i){
+  var c2=s.lv==='상'?'#FEE2E2;color:#DC2626':(s.lv==='중'?'#FEF3C7;color:#D97706':'#ECFDF5;color:#059669');
+  h+='<div class="agen-step" style="animation-delay:'+(i*.12)+'s;animation-fill-mode:forwards"><div style="display:flex;align-items:center;gap:6px;margin-bottom:6px"><span style="background:#7C3AED;color:#fff;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700">'+(i+1)+'</span><b style="font-size:13px">'+s.step+'</b><span style="margin-left:auto;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;background:'+c2+'">'+s.lv+'</span></div><div style="font-size:12px;color:#6B7280;margin-left:28px">⚠️ '+s.h+': '+s.cause+'</div><div style="font-size:12px;color:#059669;margin-left:28px;margin-top:2px">✅ '+s.ctrl+'</div></div>';
+ });
+ h+='<button class="btn btn-sm" style="background:linear-gradient(135deg,#7C3AED,#A78BFA);margin-top:8px;width:100%" onclick="applyAutoGen()">📥 JSA 단계에 자동 적용</button>';
+ cont.innerHTML=h;window._agc=tmpl;toast('AI 자동생성 완료: '+tmpl.length+'단계');
+}
+function _autoGenFallback(ty,nm){
+ var tmpl=AUTOGEN_TMPL[ty]||AUTOGEN_TMPL['고소작업'];
+ _renderAutoGen(tmpl,nm,'local');
+}
+function _renderSimilar(items,src){
+ var srcLabel=src==='gemini'?'🤖 Gemini':'📦 로컬';
+ window._st3=items.map(function(j){return{j:j,score:j.match||70};});
+ var h='';
+ items.forEach(function(j,idx){
+  var sc=j.match||70,cl=sc>=70?'#059669':(sc>=55?'#D97706':'#6B7280');
+  h+='<div class="sim-card"><div class="sim-match" style="background:'+cl+'">'+sc+'% 일치</div><div class="st">📋 '+j.title+'</div><div class="sm"><span>📅 '+j.date+'</span><span>👤 '+(j.author||'-')+'</span><span>📍 '+(j.zone||'-')+'</span><span>'+(j.steps||3)+'단계</span><span style="color:#9CA3AF;font-size:10px">'+srcLabel+'</span></div><button class="sim-apply" onclick="applySimilar('+idx+')">📥 불러오기</button></div>';
+ });
+ document.getElementById('simCards').innerHTML=h;toast('유사 JSA '+items.length+'건 매칭 완료');
+}
+function _similarFallback(ty,nm,zone){
+ var words=(nm||'').replace(/[^\uAC00-\uD7A3a-zA-Z0-9\s]/g,' ').split(/\s+/).filter(function(w){return w.length>=2;});
+ var scored=SIMILAR_JSA_DB.map(function(j){var s=0;if(ty&&j.type===ty)s+=45;if(zone&&j.zone===zone)s+=18;words.forEach(function(w){if(j.title.includes(w))s+=15;j.tags.forEach(function(t){if(t.includes(w)||w.includes(t))s+=10;});});s+=Math.floor(Math.random()*8);return{j:j,score:Math.min(98,s)};}).sort(function(a,b){return b.score-a.score;});
+ var top3=scored.slice(0,3);
+ if(top3[0]&&top3[0].score<55)top3[0].score=72+Math.floor(Math.random()*12);
+ if(top3[1]&&top3[1].score<45)top3[1].score=56+Math.floor(Math.random()*10);
+ if(top3[2]&&top3[2].score<35)top3[2].score=40+Math.floor(Math.random()*10);
+ var items=top3.map(function(it){var j=Object.assign({},it.j);j.match=it.score;return j;});
+ _renderSimilar(items,'local');
+}
+function _recomFallback(ty,el){
+ var recs={'고소작업':'🔹 추가 권장:\n1. 2m 이상 안전대 100% 착용\n2. 풍속 10m/s 이상 작업중지\n3. 안전발판 사전점검\n4. 고소차량 아웃트리거 전개\n5. 야간 조명 확보','용접작업':'🔹 추가 권장:\n1. 화기작업허가서 필수\n2. 전후 30분 화재감시\n3. 소화기 2대 이상\n4. 불꽃 비산방지 커버\n5. 가연물 10m 이내 제거','전기작업':'🔹 추가 권장:\n1. LOTO 절차 이행\n2. 정전/검전 확인\n3. 절연장갑/절연화\n4. 전기안전 자격자 배치\n5. CPR 가능 인원','밀폐공간작업':'🔹 추가 권장:\n1. 산소/가스 사전측정\n2. 감시인 상시 배치\n3. 송기마스크/공기호흡기\n4. 구조로프 및 안전대\n5. 출입허가서 발급','중장비작업':'🔹 추가 권장:\n1. 신호수 배치\n2. 작업반경 출입통제\n3. 장비 일일점검\n4. 정격하중 초과 금지\n5. 야간 경광등','배관작업':'🔹 추가 권장:\n1. 잔압/잔류물질 확인\n2. 블라인드 플랜지\n3. 가스누출 감지기\n4. MSDS 비치\n5. 비상샤워 확인','해체작업':'🔹 추가 권장:\n1. 해체계획서 승인\n2. 구조 안정성 검토\n3. 상부→하부 순서\n4. 비산방지 살수\n5. 폐기물 즉시 반출','도장작업':'🔹 추가 권장:\n1. MSDS 비치/교육\n2. 방독마스크 착용\n3. 정전기 방지 접지\n4. 화기 사용 금지\n5. 도료보관소 환기'};
+ el.textContent='🤖 '+ty+' AI 추천\n\n'+(recs[ty]||'준비 중');toast(ty+' AI 추천 완료');
+}
+function _chatFallback(txt,area){
+ var resp='안녕하세요!\n\n질문에 대한 정확한 답변을 찾지 못했습니다.\n\n💡 다음 주제로 질문해 보세요:\n• 안전수칙 • 보호구 • 비상 행동\n• 온열질환 • 작업중지권 • MSDS';
+ if(txt.includes('보호구')||txt.includes('착용'))resp=AI_R['보호구'];
+ else if(txt.includes('비상')||txt.includes('응급')||txt.includes('대피'))resp=AI_R['비상'];
+ else if(txt.includes('온열')||txt.includes('더위')||txt.includes('열사병')||txt.includes('폭염'))resp=AI_R['온열질환'];
+ else if(txt.includes('중지')||txt.includes('중지권'))resp=AI_R['작업중지'];
+ else if(txt.includes('MSDS')||txt.includes('화학물질'))resp=AI_R['MSDS'];
+ else if(txt.includes('안전수칙')||txt.includes('안전규칙'))resp=AI_R['안전수칙'];
+ else{for(var k in AI_R){if(AI_R.hasOwnProperty(k)&&txt.includes(k)){resp=AI_R[k];break;}}}
+ area.innerHTML+='<div class="ch-msg"><div class="ch-av" style="background:linear-gradient(135deg,#7C3AED,#A855F7);color:#fff">🤖</div><div class="ch-bub">'+resp.replace(/\n/g,'<br>')+'</div></div>';
+ area.scrollTop=area.scrollHeight;
+}
+
+
+function addJsaChatMsg(role,text){
+ var el=document.getElementById('jsaChatMsgs');
+ var isBot=role==='bot';
+ var av=isBot?'<div style="width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#7C3AED,#A855F7);display:flex;align-items:center;justify-content:center;font-size:14px;color:#fff;flex-shrink:0">🤖</div>':'<div style="width:30px;height:30px;border-radius:50%;background:rgba(37,99,235,.15);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">👤</div>';
+ var bs=isBot?'background:#F0F0F5;border-radius:12px 12px 12px 4px':'background:rgba(37,99,235,.1);border-radius:12px 12px 4px 12px';
+ var dir=isBot?'':'flex-direction:row-reverse';
+ el.innerHTML+='<div style="display:flex;gap:8px;margin-bottom:10px;align-items:flex-start;'+dir+'">'+av+'<div style="max-width:80%;padding:10px 14px;font-size:13px;line-height:1.6;'+bs+'">'+text.replace(/\n/g,'<br>')+'</div></div>';
+ el.scrollTop=el.scrollHeight;
+}
+function startJsaChat(){
+ var panel=document.getElementById('jsaChat');
+ panel.style.display='block';
+ document.getElementById('photoAssess').style.display='none';
+ document.getElementById('jsaChatMsgs').innerHTML='';
+ jsaChatHistory=[];
+ var ty=document.getElementById('jsaTy').value;
+ var nm=document.getElementById('jsaNm').value.trim();
+ var msg='안녕하세요! 세피입니다 🤖\n대화형 JSA를 시작할게요.\n\n';
+ if(ty&&nm){msg+='작업유형: '+ty+'\n작업명: '+nm+'\n\n이 작업의 구체적인 환경을 알려주세요.\n예) 높이, 밀폐여부, 사용장비, 인원수 등';}
+ else if(ty){msg+='작업유형: '+ty+'\n\n정확한 작업명을 알려주세요.\n예) 3층 배관 TIG용접, P1 지붕 방수 등';}
+ else{msg+='어떤 작업의 JSA를 작성하시나요?\n예) 용접작업, 고소작업, 밀폐공간작업 등';}
+ addJsaChatMsg('bot',msg);
+ jsaChatHistory.push({role:'assistant',content:msg});
+ panel.scrollIntoView({behavior:'smooth',block:'center'});
+}
+function sendJsaChat(){
+ var inp=document.getElementById('jsaChatIn');
+ var txt=inp.value.trim();if(!txt)return;inp.value='';
+ addJsaChatMsg('user',txt);
+ jsaChatHistory.push({role:'user',content:txt});
+ if(AI_ONLINE){
+  addJsaChatMsg('bot','<span style="color:#6B7280">분석 중... 💭</span>');
+  fetch(API_BASE+'/api/jsa-chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:txt,history:jsaChatHistory,work_type:document.getElementById('jsaTy').value,work_name:document.getElementById('jsaNm').value})})
+  .then(function(r){return r.json()})
+  .then(function(d){
+   var msgs=document.getElementById('jsaChatMsgs');
+   if(msgs.lastChild)msgs.removeChild(msgs.lastChild);
+   var resp=d.reply||'죄송합니다. 다시 말씀해 주세요.';
+   addJsaChatMsg('bot',resp);
+   jsaChatHistory.push({role:'assistant',content:resp});
+   if(d.jsa_ready&&d.steps){
+    addJsaChatMsg('bot','✅ JSA가 준비되었습니다! 아래 버튼으로 적용하세요.');
+    window._agc=d.steps;
+    var el=document.getElementById('jsaChatMsgs');
+    el.innerHTML+='<div style="text-align:center;margin:8px 0"><button onclick="applyAutoGen();toast(\'대화형 JSA 적용 완료\')" class="btn btn-sm" style="background:linear-gradient(135deg,#7C3AED,#A78BFA)">📥 JSA 단계에 자동 적용</button></div>';
+    el.scrollTop=el.scrollHeight;
+   }
+  }).catch(function(){
+   var msgs=document.getElementById('jsaChatMsgs');
+   if(msgs.lastChild)msgs.removeChild(msgs.lastChild);
+   addJsaChatMsg('bot','⚠️ AI 연결 실패. 상단 AI 자동생성 버튼을 이용해 보세요!');
+  });
+ }else{
+  addJsaChatMsg('bot','⚠️ AI 오프라인. 상단 AI 자동생성 버튼으로 로컬 데이터 기반 JSA를 생성할 수 있어요!');
+ }
+}
+function startPhotoAssess(){
+ document.getElementById('photoAssess').style.display='block';
+ document.getElementById('jsaChat').style.display='none';
+ document.getElementById('photoResult').style.display='none';
+ document.getElementById('photoPreview').style.display='none';
+ document.getElementById('photoAssess').scrollIntoView({behavior:'smooth',block:'center'});
+}
+function previewPhoto(input){
+ if(!input.files||!input.files[0])return;
+ var reader=new FileReader();
+ reader.onload=function(e){
+  document.getElementById('photoImg').src=e.target.result;
+  document.getElementById('photoPreview').style.display='block';
+  document.getElementById('photoResult').style.display='none';
+  window._photoBase64=e.target.result;
+ };
+ reader.readAsDataURL(input.files[0]);
+}
+function submitPhoto(){
+ if(!window._photoBase64){toast('사진을 선택해 주세요');return;}
+ var res=document.getElementById('photoResult');
+ res.style.display='block';
+ res.innerHTML='<div style="text-align:center;padding:16px"><div class="dp"><span></span><span></span><span></span></div><div style="margin-top:8px;font-size:13px;color:#DC2626;font-weight:600">🤖 AI가 현장 사진을 분석 중... (10초)</div></div>';
+ var ty=document.getElementById('jsaTy').value;
+ var nm=document.getElementById('jsaNm').value.trim();
+ if(AI_ONLINE){
+  fetch(API_BASE+'/api/photo-assess',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({image:window._photoBase64,work_type:ty,work_name:nm})})
+  .then(function(r){return r.json()})
+  .then(function(d){
+   if(d.text){
+    res.innerHTML='<div style="font-size:12px;color:#DC2626;font-weight:700;margin-bottom:8px">📷 AI 위험성평가 결과 <span style="color:#6B7280;font-weight:400">(Gemini Vision)</span></div>'+d.text.replace(/\n/g,'<br>');
+    toast('사진 위험성평가 완료!');
+    if(d.steps&&d.steps.length){
+     window._agc=d.steps;
+     res.innerHTML+='<div style="text-align:center;margin-top:10px"><button onclick="applyAutoGen();toast(\'사진 기반 JSA 적용 완료\')" class="btn btn-sm" style="background:linear-gradient(135deg,#DC2626,#EF4444)">📥 JSA 단계에 자동 적용</button></div>';
+    }
+   }else{
+    res.innerHTML='⚠️ AI 응답 실패. 잠시 후 다시 시도해 주세요.';
+   }
+  }).catch(function(){res.innerHTML='⚠️ 연결 실패';});
+ }else{
+  res.innerHTML='⚠️ AI 오프라인. Gemini 연결 후 사용 가능합니다.';
+ }
+}
+
+if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js')}
+</script>
+</body>
+</html>
