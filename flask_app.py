@@ -406,7 +406,7 @@ def api_notice_add():
 
 @app.route('/')
 def index():
-    return send_file('LG_SafeLink_v4_final.html')
+    return send_file('index.html')
 
 if __name__=='__main__':
     port = int(os.getenv('PORT',8080))
