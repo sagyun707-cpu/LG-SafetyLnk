@@ -1,0 +1,22 @@
+{
+  "name": "SafeLink v4 - 안전보건 플랫폼",
+  "short_name": "SafeLink",
+  "description": "LG전자 창원사업장 안전보건 AI 플랫폼",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#ffffff",
+  "theme_color": "#A50034",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
